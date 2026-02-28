@@ -1,0 +1,19 @@
+{
+  "id": "browser-relay",
+  "contractVersion": "1.0",
+  "name": "Browser Relay",
+  "version": "1.0.0",
+  "description": "Control your browser remotely via WebSocket relay",
+  "author": "core",
+  "position": 100,
+  "size": "full",
+  "category": "tools",
+  "refresh": "manual",
+  "requires": [],
+  "capabilities": ["fetch"],
+  "dataSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "config": {}
+}
