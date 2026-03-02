@@ -1,7 +1,7 @@
 {
-  "name": "velbrowser",
+  "name": "velbridge",
   "version": "1.0.0",
-  "title": "VelBrowser",
+  "title": "VelBridge",
   "description": "Browser relay for OpenClaw agents",
   "panels": "panels",
   "server": {
