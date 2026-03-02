@@ -1,80 +1,61 @@
-<h1 align="center">VelReach</h1>
+# ⚡ VelReach — Browser Relay for OpenClaw Agents
 
-<p align="center">
-  <strong>Your agent can use your browser.</strong>
-</p>
+VelReach is a [Vel](https://github.com/essdee/vel) app that gives OpenClaw agents browser control capabilities. It acts as a WebSocket relay between Chrome running on a user's machine and an AI agent running on a server.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-c9a84c?style=flat-square" alt="Version">
-  <img src="https://img.shields.io/badge/Vel_app-⚡-ff6b35?style=flat-square" alt="Vel App">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
-</p>
+## How It Works
 
----
-
-Your AI agent is powerful — until it needs to log into a website, fill out a form, or check something behind a login. Then you're back to doing it yourself.
-
-**VelReach lets your agent use your browser.** The one you're already logged into. With your cookies, your sessions, your saved passwords. No credentials shared. Ever.
-
-Pair with a 6-character code. Your agent gets access. You watch everything it does in real time.
-
----
-
-## How it works
-
-1. **Run the launcher** on your machine. It opens Chrome and gives you a pairing code.
-2. **Tell your agent the code.** It connects.
-3. **That's it.** Your agent can now see and control your browser.
-
-You stay logged in everywhere. Your agent uses those sessions directly. Need it to check your GST portal? Your bank dashboard? Your analytics? It just opens the tab and does it — because you're already authenticated.
-
-When you're done, close the tab. Connection ends. You're always in control.
-
----
-
-## Watch it work
-
-This isn't a black box. VelReach runs in *your* browser on *your* machine. You see every page load, every click, every form fill as it happens. Your agent works, you watch.
-
-If something looks wrong, close the tab. Done.
-
----
-
-## Built for the real web
-
-- **Human-like mouse movements** — Bezier curves, natural speed. No teleporting cursors that trigger bot detection.
-- **No credentials needed** — Your browser is already logged in. Your agent uses that.
-- **Full Chrome DevTools Protocol** — Your agent sees the page the way a developer does.
-- **Works with any site** — If you can open it in Chrome, your agent can use it.
-
----
-
-## Stop waiting for PRs
-
-Need your agent to handle a new kind of website? A different workflow? You don't file an issue and wait. Your agent already has full browser access — it figures out the page and does the work. The [Vel](https://github.com/essdee/vel) framework underneath ensures the connection stays stable and secure while your agent does whatever it needs to do.
-
----
-
-## Get started
-
-```bash
-cd your-vel-app/apps/
-git clone https://github.com/karthikeyan5/velreach.git
-cd /path/to/vel && ./vel build && ./vel start
+```
+┌──────────────┐    WebSocket     ┌──────────────┐    WebSocket/CDP    ┌──────────────┐
+│  Chrome +     │ ◄──────────────► │  VelReach     │ ◄────────────────► │  OpenClaw     │
+│  Extension    │   /relay/ws      │  Server       │   /relay/cdp       │  Agent        │
+└──────────────┘                  └──────────────┘                     └──────────────┘
+   User's PC                         Server                              Server
 ```
 
-Then run the launcher script on your machine to pair your browser.
+1. **User** opens Chrome with the OpenClaw Browser Relay extension
+2. **Extension** connects to VelReach via WebSocket (`/relay/ws`)
+3. **Agent** connects to VelReach via CDP-compatible WebSocket (`/relay/cdp`)
+4. VelReach **relays** Chrome DevTools Protocol messages between them
 
-📖 **[Launcher setup & architecture →](./RELAY.md)**
+The agent can then inspect tabs, run JavaScript, take screenshots, click elements — anything CDP supports.
 
----
+## Pairing Flow
 
-## Part of the Vel ecosystem
+VelReach uses pairing codes to securely connect browser sessions:
 
-VelReach is a [Vel](https://github.com/essdee/vel) app. It pairs naturally with [Velboard](https://github.com/karthikeyan5/velboard) — the dashboard that builds itself. Together, your agent can see everything and do anything.
+1. Agent requests a pairing code → `POST /relay/pair/new` → returns `{code, token, expiresAt}`
+2. User enters the 6-character code in the browser extension
+3. Extension activates the pairing → `POST /relay/pair/activate`
+4. Agent polls for activation → `GET /relay/pair/status?token=...` → gets `relayToken`
+5. Both sides use the relay token for subsequent WebSocket connections
 
----
+Pairing codes expire after 5 minutes. The alphabet excludes ambiguous characters (0/O/1/I/L).
 
-## License
+## Endpoints
 
-[MIT](./LICENSE)
+| Endpoint | Description |
+|----------|-------------|
+| `GET /relay/status` | Relay status (active sessions, etc.) |
+| `GET /relay/token` | Token management |
+| `GET /relay/json` | List available targets (tabs) |
+| `WS /relay/ws` | Browser extension WebSocket |
+| `WS /relay/cdp` | Agent WebSocket (envelope mode) |
+| `WS /relay/cdp/ws` | Agent WebSocket (raw CDP mode) |
+| `GET /relay/cdp/json/version` | CDP-compatible version endpoint |
+| `GET /relay/cdp/json/list` | CDP-compatible target list |
+| `POST /relay/pair/new` | Create pairing code |
+| `GET /relay/pair/status` | Check pairing status |
+| `POST /relay/pair/activate` | Activate pairing with code |
+| `POST /relay/download` | File download via browser |
+| `WS /relay/bridge` | Launcher bridge WebSocket |
+
+## Architecture
+
+- **SessionManager** — manages relay sessions keyed by token, tracks connected browser/agent WebSockets and CDP targets
+- **PairingManager** — handles pairing code generation, activation, and cleanup (max 20 pending, 30s cleanup interval)
+- **LauncherStore** — coordinates with launcher scripts that provide CDP WebSocket URLs (5-min TTL)
+- **Relay** — main struct tying it all together, handles all HTTP/WebSocket handlers
+
+## Panel
+
+VelReach includes a `browser-relay` panel that shows relay status in the Vel dashboard.
