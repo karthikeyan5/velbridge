@@ -1,65 +1,62 @@
-# ⚡ VelBridge — Browser Relay for OpenClaw Agents
+<h1 align="center">⚡ VelBridge</h1>
 
-VelBridge is a [Vel](https://github.com/essdee/vel) app that gives OpenClaw agents browser control capabilities. It acts as a WebSocket relay between Chrome running on a user's machine and an AI agent running on a server.
+<p align="center">
+  <strong>Your agent can use your browser.</strong>
+</p>
 
-## How It Works
+<p align="center">
+  <sub>A <a href="https://github.com/essdee/vel">Vel</a> app — no passwords shared, full transparency.</sub>
+</p>
 
-```
-┌──────────────┐    WebSocket     ┌──────────────┐    WebSocket/CDP    ┌──────────────┐
-│  Chrome +     │ ◄──────────────► │  VelBridge     │ ◄────────────────► │  OpenClaw     │
-│  Extension    │   /relay/ws      │  Server       │   /relay/cdp       │  Agent        │
-└──────────────┘                  └──────────────┘                     └──────────────┘
-   User's PC                         Server                              Server
-```
+---
 
-1. **User** opens Chrome with the OpenClaw Browser Relay extension
-2. **Extension** connects to VelBridge via WebSocket (`/relay/ws`)
-3. **Agent** connects to VelBridge via CDP-compatible WebSocket (`/relay/cdp`)
-4. VelBridge **relays** Chrome DevTools Protocol messages between them
+## Your agent can use YOUR browser
 
-The agent can then inspect tabs, run JavaScript, take screenshots, click elements — anything CDP supports.
+Not a browser. YOUR browser. The one with your cookies, your sessions, your saved logins. Your agent doesn't need your credentials — you're already logged in.
 
-## Pairing Flow
+## No passwords shared
 
-VelBridge uses pairing codes to securely connect browser sessions:
+Your agent never sees a password. It uses the browser session where you're already authenticated. No credential vaults, no token exchanges, no trust-me-bro security. You're logged in. That's enough.
 
-1. Agent requests a pairing code → `POST /relay/pair/new` → returns `{code, token, expiresAt}`
-2. User enters the 6-character code in the browser extension
-3. Extension activates the pairing → `POST /relay/pair/activate`
-4. Agent polls for activation → `GET /relay/pair/status?token=...` → gets `relayToken`
-5. Both sides use the relay token for subsequent WebSocket connections
+## How it works
 
-Pairing codes expire after 5 minutes. The alphabet excludes ambiguous characters (0/O/1/I/L).
+1. **Pair** — Your agent requests a 6-character code. You enter it in the Chrome extension. Connected.
+2. **Watch** — Your agent works in your browser. You see everything it does, in real time, on your machine.
+3. **Unpair** — Done? Disconnect anytime. Your machine, your rules.
 
-## Endpoints
+That's it. No setup wizards, no config files, no infrastructure.
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /relay/status` | Relay status (active sessions, etc.) |
-| `GET /relay/token` | Token management |
-| `GET /relay/json` | List available targets (tabs) |
-| `WS /relay/ws` | Browser extension WebSocket |
-| `WS /relay/cdp` | Agent WebSocket (envelope mode) |
-| `WS /relay/cdp/ws` | Agent WebSocket (raw CDP mode) |
-| `GET /relay/cdp/json/version` | CDP-compatible version endpoint |
-| `GET /relay/cdp/json/list` | CDP-compatible target list |
-| `POST /relay/pair/new` | Create pairing code |
-| `GET /relay/pair/status` | Check pairing status |
-| `POST /relay/pair/activate` | Activate pairing with code |
-| `POST /relay/download` | File download via browser |
-| `WS /relay/bridge` | Launcher bridge WebSocket |
+## What your agent can do
 
-## Architecture
+- Inspect and switch between your open tabs
+- Run JavaScript on any page
+- Take screenshots
+- Click elements, fill forms, navigate
+- Download files through your browser
+- Human-like interaction — bezier curve mouse movements, not teleporting cursors
 
-- **SessionManager** — manages relay sessions keyed by token, tracks connected browser/agent WebSockets and CDP targets
-- **PairingManager** — handles pairing code generation, activation, and cleanup (max 20 pending, 30s cleanup interval)
-- **LauncherStore** — coordinates with launcher scripts that provide CDP WebSocket URLs (5-min TTL)
-- **Relay** — main struct tying it all together, handles all HTTP/WebSocket handlers
+Your agent works like you would. Sites can't tell the difference.
 
-## Panel
+## Don't wait for PRs
 
-VelBridge includes a `browser-relay` panel that shows relay status in the Vel dashboard.
+Need a browser capability that doesn't exist? Your agent extends VelBridge. The Vel framework validates the extension at build time — no breaking what already works.
 
 ## See Also
 
-- **[Velboard](https://github.com/karthikeyan5/velboard)** — Real-time monitoring dashboard for your agent. CPU, memory, Claude usage, cron jobs, and more. Another Vel app.
+- **[Velboard](https://github.com/karthikeyan5/velboard)** — The dashboard that builds itself. 11 panels on day one, your agent builds the next ones. Another Vel app.
+
+## Built on Vel
+
+VelBridge is a **[Vel](https://github.com/essdee/vel)** app. Vel is an AI-native Go framework — your agent builds, the framework guarantees. For framework docs, see the [Vel repo](https://github.com/essdee/vel).
+
+Technical details (architecture, API endpoints) are in separate docs.
+
+## License
+
+[MIT](./LICENSE)
+
+---
+
+<p align="center">
+  <sub>Built on <a href="https://github.com/essdee/vel">Vel ⚡</a> for <a href="https://github.com/openclaw/openclaw">OpenClaw</a> agents.</sub>
+</p>
