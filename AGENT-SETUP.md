@@ -95,7 +95,8 @@ ExecStart=<install-dir>/vel
 EnvironmentFile=<install-dir>/.env
 Restart=always
 RestartSec=5
-User=<username>  # use the appropriate system user
+User=<username>
+Environment=HOME=/home/<username>  # REQUIRED: systemd doesn't always set HOME correctly
 
 [Install]
 WantedBy=multi-user.target
