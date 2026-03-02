@@ -1,27 +1,27 @@
-# ⚡ VelReach — Browser Relay for OpenClaw Agents
+# ⚡ VelBrowser — Browser Relay for OpenClaw Agents
 
-VelReach is a [Vel](https://github.com/essdee/vel) app that gives OpenClaw agents browser control capabilities. It acts as a WebSocket relay between Chrome running on a user's machine and an AI agent running on a server.
+VelBrowser is a [Vel](https://github.com/essdee/vel) app that gives OpenClaw agents browser control capabilities. It acts as a WebSocket relay between Chrome running on a user's machine and an AI agent running on a server.
 
 ## How It Works
 
 ```
 ┌──────────────┐    WebSocket     ┌──────────────┐    WebSocket/CDP    ┌──────────────┐
-│  Chrome +     │ ◄──────────────► │  VelReach     │ ◄────────────────► │  OpenClaw     │
+│  Chrome +     │ ◄──────────────► │  VelBrowser     │ ◄────────────────► │  OpenClaw     │
 │  Extension    │   /relay/ws      │  Server       │   /relay/cdp       │  Agent        │
 └──────────────┘                  └──────────────┘                     └──────────────┘
    User's PC                         Server                              Server
 ```
 
 1. **User** opens Chrome with the OpenClaw Browser Relay extension
-2. **Extension** connects to VelReach via WebSocket (`/relay/ws`)
-3. **Agent** connects to VelReach via CDP-compatible WebSocket (`/relay/cdp`)
-4. VelReach **relays** Chrome DevTools Protocol messages between them
+2. **Extension** connects to VelBrowser via WebSocket (`/relay/ws`)
+3. **Agent** connects to VelBrowser via CDP-compatible WebSocket (`/relay/cdp`)
+4. VelBrowser **relays** Chrome DevTools Protocol messages between them
 
 The agent can then inspect tabs, run JavaScript, take screenshots, click elements — anything CDP supports.
 
 ## Pairing Flow
 
-VelReach uses pairing codes to securely connect browser sessions:
+VelBrowser uses pairing codes to securely connect browser sessions:
 
 1. Agent requests a pairing code → `POST /relay/pair/new` → returns `{code, token, expiresAt}`
 2. User enters the 6-character code in the browser extension
@@ -58,4 +58,4 @@ Pairing codes expire after 5 minutes. The alphabet excludes ambiguous characters
 
 ## Panel
 
-VelReach includes a `browser-relay` panel that shows relay status in the Vel dashboard.
+VelBrowser includes a `browser-relay` panel that shows relay status in the Vel dashboard.

@@ -1,6 +1,6 @@
-# ⚡ VelReach — Agent Setup Guide
+# ⚡ VelBrowser — Agent Setup Guide
 
-**For AI agents:** Step-by-step instructions to set up VelReach (browser relay) from scratch.
+**For AI agents:** Step-by-step instructions to set up VelBrowser (browser relay) from scratch.
 
 ---
 
@@ -16,7 +16,7 @@
 
 ## Step 1 — Install the Vel framework
 
-VelReach is a Vel app. Install Vel first:
+VelBrowser is a Vel app. Install Vel first:
 
 ```bash
 # Clone Vel
@@ -46,27 +46,27 @@ echo "BOT_TOKEN=<token>" > <install-dir>/.env
 
 ---
 
-## Step 2 — Install VelReach
+## Step 2 — Install VelBrowser
 
 ```bash
 cd <install-dir>/apps/
-git clone https://github.com/karthikeyan5/velreach.git
+git clone https://github.com/karthikeyan5/velbrowser.git
 ```
 
-Rebuild Vel to include VelReach's server-side code:
+Rebuild Vel to include VelBrowser's server-side code:
 
 ```bash
 cd <install-dir>
 go run . build --mode=bypass
 ```
 
-This scans VelReach's Go server code, generates imports, and compiles a single binary with the relay endpoints included.
+This scans VelBrowser's Go server code, generates imports, and compiles a single binary with the relay endpoints included.
 
 ---
 
 ## Step 3 — Configure
 
-VelReach works out of the box with no extra configuration. The relay endpoints are automatically registered at `/relay/*`.
+VelBrowser works out of the box with no extra configuration. The relay endpoints are automatically registered at `/relay/*`.
 
 To configure OpenClaw to use this relay, set the relay URL in your OpenClaw config:
 
@@ -85,7 +85,7 @@ Create `/etc/systemd/system/vel.service`:
 
 ```ini
 [Unit]
-Description=Vel Dashboard + VelReach
+Description=Vel Dashboard + VelBrowser
 After=network.target
 
 [Service]
@@ -113,7 +113,7 @@ sudo systemctl start vel
 
 **⏸️ STOP — Ask the user how they want to expose the dashboard before proceeding.**
 
-> How would you like to expose VelReach to the internet?
+> How would you like to expose VelBrowser to the internet?
 >
 > 1. **Nginx + Let's Encrypt** — if you already have nginx installed
 > 2. **Caddy** — automatic HTTPS, simpler config
