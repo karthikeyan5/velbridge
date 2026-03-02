@@ -59,3 +59,7 @@ Pairing codes expire after 5 minutes. The alphabet excludes ambiguous characters
 ## Panel
 
 VelBrowser includes a `browser-relay` panel that shows relay status in the Vel dashboard.
+
+## See Also
+
+- **[Velboard](https://github.com/karthikeyan5/velboard)** — Real-time monitoring dashboard for your agent. CPU, memory, Claude usage, cron jobs, and more. Another Vel app.
