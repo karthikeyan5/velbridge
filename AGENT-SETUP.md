@@ -97,6 +97,7 @@ Restart=always
 RestartSec=5
 User=<username>
 Environment=HOME=/home/<username>  # REQUIRED: systemd doesn't always set HOME correctly
+Environment=WORKSPACE=/home/<username>/.openclaw/workspace  # REQUIRED: panels read data files from this directory
 
 [Install]
 WantedBy=multi-user.target
