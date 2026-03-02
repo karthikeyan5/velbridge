@@ -9,7 +9,6 @@
   },
   "capabilities": {
     "net": {},
-    "log": {},
     "github.com/gorilla/websocket": {}
   }
 }

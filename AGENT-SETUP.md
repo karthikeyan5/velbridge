@@ -33,8 +33,7 @@ Rebuild Vel to include VelBridge's server-side code:
 
 ```bash
 cd <install-dir>
-go run . build --mode=bypass
-go build -o vel .
+./vel build
 ```
 
 This scans VelBridge's Go server code, generates imports, and compiles a single binary with the relay endpoints included.
@@ -83,8 +82,7 @@ curl -s https://<domain>/relay/cdp/json/version
 cd <install-dir>/apps/velbridge
 git pull
 cd <install-dir>
-go run . build --mode=bypass
-go build -o vel .
+./vel build
 sudo systemctl restart vel
 ```
 
