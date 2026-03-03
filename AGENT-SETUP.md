@@ -86,6 +86,86 @@ cd <install-dir>
 sudo systemctl restart vel
 ```
 
+## Step 5 — Using VelBridge from your agent
+
+VelBridge ships a Python helper library at `helpers/browser.py` that handles the relay protocol, Bezier mouse movement, and human-like interaction.
+
+### Install dependency
+
+```bash
+pip install websockets
+```
+
+### Copy the helper to your workspace
+
+```bash
+cp <install-dir>/apps/velbridge/helpers/browser.py /tmp/browser.py
+```
+
+### Agent usage flow
+
+```python
+from browser import Browser
+
+# 1. Connect to the relay
+b = Browser(
+    relay_token="<relay_token>",     # From pairing activation response
+    server="https://<domain>",       # Your Vel instance URL
+    human_mode=True,                 # Bezier mouse, random delays, jitter
+)
+b.connect()
+
+# 2. ALWAYS open a new tab — never navigate existing tabs
+tab = b.new_tab("https://www.google.com")
+
+# 3. Interact naturally
+b.type_text("Tirupur weather", "textarea[name=q]")
+b.press_key("Enter")
+b.wait_for_load()
+
+# 4. Read results
+print(b.get_title())
+print(b.read_page())
+
+# 5. Take screenshots
+b.screenshot("/tmp/result.png")
+
+# 6. Clean up — close YOUR tab, keep the bridge alive
+b.close_tab(tab)
+b.disconnect()
+```
+
+### Available methods
+
+| Method | Description |
+|---|---|
+| `connect()` / `disconnect()` | Open/close relay WebSocket |
+| `new_tab(url)` | Open a new tab (safe — never touches bridge) |
+| `close_tab(id)` | Close a specific tab |
+| `list_tabs()` | List open tabs `[{id, title, url}]` |
+| `navigate(url)` | Navigate current tab |
+| `click(x, y)` | Click with Bezier mouse movement |
+| `click_element(selector)` | Find element, click its center |
+| `type_text(text, selector?)` | Type with random per-key delays |
+| `press_key(key)` | Enter, Tab, Escape, etc. |
+| `scroll(direction, amount)` | up/down/left/right |
+| `evaluate(js)` | Run JS, return result |
+| `read_page()` | Get visible text |
+| `read_html()` | Get full HTML |
+| `screenshot(path?)` | Full page PNG |
+| `screenshot_element(selector)` | Element-specific screenshot |
+
+### Context manager (recommended)
+
+```python
+with Browser(relay_token="<token>", server="https://<domain>", human_mode=True) as b:
+    b.new_tab("https://example.com")
+    print(b.read_page())
+# Auto-disconnects when done
+```
+
+---
+
 ## ⚠️ Critical: Never Navigate the Bridge Tab
 
 **The bridge tab is the relay's lifeline.** It maintains the WebSocket connection between the user's browser and your server.
