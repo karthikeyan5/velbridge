@@ -86,9 +86,21 @@ cd <install-dir>
 sudo systemctl restart vel
 ```
 
+## ⚠️ Critical: Never Navigate the Bridge Tab
+
+**The bridge tab is the relay's lifeline.** It maintains the WebSocket connection between the user's browser and your server.
+
+When you receive a target list from the relay, one of them will be the bridge tab itself (URL contains `/relay/bridge`). **Never navigate, close, or interact with this tab.** If you do, the WebSocket dies and the entire relay connection drops.
+
+**Rules:**
+- Filter out the bridge tab when choosing targets — skip any target whose URL contains `/relay/bridge`
+- Only navigate/interact with the user's real tabs (other pages they have open)
+- If you need a fresh tab, use CDP's `Target.createTarget` to open a new one — don't reuse the bridge
+
 ## Troubleshooting
 
 - **WebSocket connection fails** → Ensure your reverse proxy has `Upgrade` and `Connection` headers set
 - **Pairing code expired** → Codes expire after 5 minutes, request a new one
 - **No targets showing** → Browser extension must be connected and have tabs open
 - **CDP proxy not working** → Check that the relay token matches between browser and agent
+- **Relay suddenly disconnects** → You probably navigated the bridge tab. Reconnect and don't touch it.
