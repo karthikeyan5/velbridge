@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw Browser</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0e0e12; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .container { max-width: 520px; width: 100%; padding: 40px 24px; text-align: center; }
+  .logo { font-size: 48px; margin-bottom: 8px; }
+  h1 { font-size: 24px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+  .subtitle { font-size: 14px; color: #888; margin-bottom: 32px; line-height: 1.5; }
+  .steps { text-align: left; margin-bottom: 32px; }
+  .step { display: flex; gap: 14px; margin-bottom: 20px; align-items: flex-start; }
+  .step-num { width: 28px; height: 28px; border-radius: 8px; background: rgba(0,170,255,0.12); color: #0af; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step-text { font-size: 14px; color: #bbb; line-height: 1.6; padding-top: 3px; }
+  .step-text strong { color: #e0e0e0; }
+  .download-section { margin-bottom: 24px; }
+  .btn { display: inline-block; padding: 12px 28px; border: 1px solid #0af; border-radius: 8px; background: rgba(0,170,255,0.1); color: #0af; cursor: pointer; font-size: 14px; font-weight: 600; text-decoration: none; transition: all 0.2s; margin: 4px; }
+  .btn:hover { background: rgba(0,170,255,0.2); }
+  .btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  .toggle { color: #0af; font-size: 12px; cursor: pointer; opacity: 0.7; margin-top: 8px; display: inline-block; }
+  .other-platforms { display: none; margin-top: 10px; }
+  .other-platforms.show { display: flex; gap: 12px; justify-content: center; }
+  .other-platforms a { color: #0af; font-size: 12px; opacity: 0.6; }
+  .card { background: #16161c; border: 1px solid #2a2a35; border-radius: 12px; padding: 20px; margin-bottom: 20px; text-align: left; }
+  code { background: #1a1a24; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #0af; }
+  .footer { margin-top: 24px; color: #444; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">⚡</div>
+  <h1>OpenClaw Browser</h1>
+  <div class="subtitle">Let your AI control a browser on your computer — from anywhere.</div>
+
+  <div class="card">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text"><strong>Download</strong> the launcher script for your platform</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text"><strong>Run it</strong> — you'll see a 6-digit pairing code</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text"><strong>Send the code</strong> to your AI on Telegram</div>
+      </div>
+      <div class="step" style="margin-bottom:0">
+        <div class="step-num">4</div>
+        <div class="step-text"><strong>Done!</strong> Browser launches and connects automatically</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="download-section">
+    <div class="btn-row" id="downloads"></div>
+    <span class="toggle" id="otherToggle" onclick="toggleOther()"></span>
+    <div class="other-platforms" id="otherPlatforms"></div>
+  </div>
+
+  <div class="footer">Powered by OpenClaw · Keep the launcher terminal open while using</div>
+</div>
+
+<script>
+(function() {
+  const platforms = { linux: 'Linux', mac: 'Mac', windows: 'Windows' };
+  const ua = navigator.userAgent || '';
+  const pl = navigator.platform || '';
+  let detected = 'linux';
+  if (/Win/i.test(pl)) detected = 'windows';
+  else if (/Mac/i.test(pl)) detected = 'mac';
+
+  const dlRow = document.getElementById('downloads');
+  const otherRow = document.getElementById('otherPlatforms');
+  const toggle = document.getElementById('otherToggle');
+
+  // Primary download button
+  const btn = document.createElement('a');
+  btn.href = '/relay/download?platform=' + detected;
+  btn.className = 'btn';
+  btn.textContent = '⬇ Download for ' + platforms[detected];
+  dlRow.appendChild(btn);
+
+  // Other platforms
+  const others = Object.keys(platforms).filter(p => p !== detected);
+  toggle.textContent = '▸ Other platforms';
+  others.forEach(p => {
+    const a = document.createElement('a');
+    a.href = '/relay/download?platform=' + p;
+    a.textContent = '⬇ ' + platforms[p];
+    otherRow.appendChild(a);
+  });
+
+  window.toggleOther = function() {
+    const el = document.getElementById('otherPlatforms');
+    el.classList.toggle('show');
+    toggle.textContent = el.classList.contains('show') ? '▾ Other platforms' : '▸ Other platforms';
+  };
+})();
+</script>
+</body>
+</html>

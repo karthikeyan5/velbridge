@@ -4,6 +4,12 @@
   "title": "VelBridge",
   "description": "Browser relay for OpenClaw agents",
   "panels": "panels",
+  "routes": {
+    "/relay/connect": {
+      "type": "page",
+      "dir": "pages/relay-connect"
+    }
+  },
   "server": {
     "package": "server"
   },
