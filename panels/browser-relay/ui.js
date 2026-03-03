@@ -45,12 +45,12 @@ export default function BrowserRelayPanel({ data, error, connected, lastUpdate, 
   useEffect(() => {
     const poll = async () => {
       try {
-        const resp = await fetch('/relay/status');
+        const resp = await fetch('/relay/status', { credentials: 'same-origin' });
         if (resp.ok) {
           const s = await resp.json();
           // Also try to get targets
           try {
-            const tr = await fetch('/relay/json');
+            const tr = await fetch('/relay/json', { credentials: 'same-origin' });
             if (tr.ok) s.targets = await tr.json();
           } catch(e) {}
           setStatus(s);
