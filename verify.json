@@ -4,7 +4,7 @@
       "type": "http_get",
       "path": "/relay/connect",
       "expect_status": 200,
-      "hint": "VelBridge relay connect page not serving. Check the pages/relay-connect directory exists."
+      "hint": "VelBridge relay connect page serves download/pairing info (relay paths are public, use their own token system)."
     },
     {
       "type": "file_exists",
