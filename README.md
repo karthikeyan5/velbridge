@@ -1,62 +1,102 @@
-<h1 align="center">⚡ VelBridge</h1>
+<p align="center">
+  <strong>🌉 VelBridge</strong>
+</p>
+
+<h1 align="center">Your agent controls your browser.</h1>
 
 <p align="center">
-  <strong>Your agent can use your browser.</strong>
+  Your AI agent runs on a VPS. Your browser runs on your laptop.<br>
+  VelBridge connects them. Securely. In seconds.
 </p>
 
 <p align="center">
-  <sub>A <a href="https://github.com/essdee/vel">Vel</a> app — no passwords shared, full transparency.</sub>
+  <img src="https://img.shields.io/badge/version-1.0.0-c9a84c?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/protocol-CDP-blue?style=flat-square" alt="CDP">
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License">
 </p>
 
 ---
 
-## Your agent can use YOUR browser
+## The Problem
 
-Not a browser. YOUR browser. The one with your cookies, your sessions, your saved logins. Your agent doesn't need your credentials — you're already logged in.
+Your AI agent can do amazing things — but it can't click a button on a website. It can't log into your bank. It can't fill out a form on a site that blocks bots.
 
-## No passwords shared
+Headless browsers are detectable. Browser automation from the server is fragile. What if your agent could just use **your actual browser**?
 
-Your agent never sees a password. It uses the browser session where you're already authenticated. No credential vaults, no token exchanges, no trust-me-bro security. You're logged in. That's enough.
+## How It Works
 
-## How it works
+```
+Your Agent (VPS)  ←→  VelBridge Relay  ←→  Your Browser (Laptop)
+```
 
-1. **Pair** — Your agent requests a 6-character code. You enter it in the Chrome extension. Connected.
-2. **Watch** — Your agent works in your browser. You see everything it does, in real time, on your machine.
-3. **Unpair** — Done? Disconnect anytime. Your machine, your rules.
+1. **You** open the VelBridge launcher on your computer
+2. **Enter** a 6-digit pairing code from your Telegram bot
+3. **Done** — your agent can now control your browser via Chrome DevTools Protocol
 
-That's it. No setup wizards, no config files, no infrastructure.
+No passwords shared. No browser data leaves your machine. The relay just forwards commands.
 
-## What your agent can do
+---
 
-- Inspect and switch between your open tabs
-- Run JavaScript on any page
-- Take screenshots
-- Click elements, fill forms, navigate
-- Download files through your browser
-- Human-like interaction — bezier curve mouse movements, not teleporting cursors
+## What makes it different
 
-Your agent works like you would. Sites can't tell the difference.
+| Feature | VelBridge | SweetLink | Playwright |
+|---------|-----------|-----------|------------|
+| Setup | Download + pair code | Node.js + pnpm + mkcert + TLS | npm install + code |
+| Works with your tabs | ✅ Your actual browser | ✅ Controlled Chrome | ❌ Headless only |
+| Zero config | ✅ | ❌ | ❌ |
+| Human-like interaction | ✅ Bézier mouse curves | ❌ | ❌ |
+| Cross-network | ✅ Agent on VPS, browser on laptop | ✅ | ❌ Local only |
 
-## Don't wait for PRs
+---
 
-Need a browser capability that doesn't exist? Your agent extends VelBridge. The Vel framework validates the extension at build time — no breaking what already works.
+## Features
 
-## See Also
+- **🔑 Pairing code flow** — No API keys or tokens to manage. Just a 6-digit code.
+- **🖱️ Human-like interaction** — Bézier curve mouse movement, realistic typing delays
+- **🔒 Secure** — WebSocket relay, no browser data stored server-side
+- **📡 Cross-network** — Agent anywhere, browser anywhere
+- **🖥️ Dashboard panel** — See connection status from your Vel dashboard
 
-- **[Velboard](https://github.com/karthikeyan5/velboard)** — The dashboard that builds itself. 11 panels on day one, your agent builds the next ones. Another Vel app.
+---
+
+## Install
+
+```bash
+cd /path/to/vel/apps/
+git clone https://github.com/karthikeyan5/velbridge.git
+cd /path/to/vel/ && ./vel build
+```
+
+Then download the launcher for your OS from the VelBridge page in your dashboard.
+
+### macOS users
+
+If Gatekeeper blocks the launcher, open Terminal and run:
+```bash
+curl -sSL https://your-dashboard/relay/launcher?platform=mac | bash
+```
+
+---
+
+## Architecture
+
+```
+┌──────────────┐     WebSocket      ┌──────────────┐     CDP      ┌──────────────┐
+│   AI Agent   │ ←──────────────── │  Vel Server   │ ←─────────── │  Your Chrome  │
+│   (VPS)      │     commands       │  (Relay)      │   bridge     │  (Laptop)     │
+└──────────────┘     + responses    └──────────────┘   page       └──────────────┘
+```
+
+The bridge page runs in your Chrome and connects to the browser's DevTools WebSocket. The relay server forwards CDP commands from your agent. No data is stored — it's a pure pass-through.
+
+---
 
 ## Built on Vel
 
-VelBridge is a **[Vel](https://github.com/essdee/vel)** app. Vel is an AI-native Go framework — your agent builds, the framework guarantees. For framework docs, see the [Vel repo](https://github.com/essdee/vel).
-
-Technical details (architecture, API endpoints) are in separate docs.
-
-## License
-
-[MIT](./LICENSE)
+VelBridge is a [Vel](https://github.com/essdee/vel) app. It registers routes, a dashboard panel, and Go server code — all compiled into Vel's single binary.
 
 ---
 
 <p align="center">
-  <sub>Built on <a href="https://github.com/essdee/vel">Vel ⚡</a> for <a href="https://github.com/openclaw/openclaw">OpenClaw</a> agents.</sub>
+  <sub>Built on <a href="https://github.com/essdee/vel">⚡ Vel</a> — the framework where AI builds and the framework guarantees.</sub>
 </p>
