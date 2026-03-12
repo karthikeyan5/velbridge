@@ -95,13 +95,13 @@ func (rl *Relay) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	switch platform {
 	case "linux":
 		script = generateLinuxScript(baseURL)
-		filename = "openclaw-browser.sh"
+		filename = "velbridge-launcher.sh"
 	case "mac":
 		script = generateMacScript(baseURL)
-		filename = "openclaw-browser.command"
+		filename = "velbridge-launcher.command"
 	case "windows":
 		script = generateWindowsScript(baseURL)
-		filename = "openclaw-browser.bat"
+		filename = "velbridge-launcher.bat"
 	default:
 		http.Error(w, "Invalid platform. Use: linux, mac, windows", 400)
 		return
@@ -118,7 +118,7 @@ const bridgeHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>OpenClaw Browser</title>
+<title>VelBridge</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0e0e12; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -153,7 +153,7 @@ const bridgeHTML = `<!DOCTYPE html>
 <body>
 <div class="container">
   <div class="logo">🦞</div>
-  <h1>OpenClaw Browser</h1>
+  <h1>VelBridge</h1>
   <div class="card" id="statusCard">
     <div class="status-icon" id="statusIcon">⏳</div>
     <div class="status-text" id="statusText">Starting...</div>
@@ -511,7 +511,7 @@ const bridgeHTML = `<!DOCTYPE html>
 
 func generateLinuxScript(baseURL string) string {
 	return fmt.Sprintf(`#!/bin/bash
-# OpenClaw Browser Launcher
+# VelBridge Launcher
 
 SERVER="%s"
 
@@ -568,7 +568,7 @@ echo "👋 Goodbye!"
 
 func generateMacScript(baseURL string) string {
 	return fmt.Sprintf(`#!/bin/bash
-# OpenClaw Browser Launcher
+# VelBridge Launcher
 
 SERVER="%s"
 
@@ -620,7 +620,7 @@ echo "👋 Goodbye!"
 func generateWindowsScript(baseURL string) string {
 	return fmt.Sprintf(`@echo off
 setlocal EnableDelayedExpansion
-REM OpenClaw Browser Launcher
+REM VelBridge Launcher
 
 set "SERVER=%s"
 

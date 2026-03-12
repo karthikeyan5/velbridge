@@ -69,7 +69,7 @@ curl -s https://<domain>/relay/cdp/json/version
 
 ## Step 4 — Connect a browser
 
-1. Install the OpenClaw Browser Relay Chrome extension
+1. Install the VelBridge Chrome extension
 2. Click the extension icon on a tab
 3. The extension will connect to `wss://<domain>/relay/ws`
 4. Use pairing codes or direct token auth to establish the session
