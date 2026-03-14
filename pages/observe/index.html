@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VelBridge — Observe</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #e2e2e8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  .container { max-width: 600px; margin: 0 auto; padding: 24px 16px; }
+  .header { text-align: center; margin-bottom: 24px; }
+  .header h1 { font-size: 20px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+  .header .label { font-size: 13px; color: #888; }
+  .header .session-id { font-family: monospace; font-size: 11px; color: #555; margin-top: 4px; }
+
+  /* ── Status Bar ── */
+  .status-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #12121a; border: 1px solid #1e1e2e; border-radius: 10px; margin-bottom: 16px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.live { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+  .status-dot.disconnected { background: #ef4444; }
+  .status-dot.waiting { background: #f59e0b; animation: pulse 1.5s infinite; }
+  .status-text { font-size: 13px; color: #aaa; flex: 1; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* ── Settings Panel ── */
+  .settings { background: #12121a; border: 1px solid #1e1e2e; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .settings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; cursor: pointer; }
+  .settings-header h2 { font-size: 14px; font-weight: 600; color: #ccc; display: flex; align-items: center; gap: 6px; }
+  .settings-toggle { font-size: 11px; color: #666; }
+  .settings-body { display: block; }
+  .settings-body.collapsed { display: none; }
+
+  .setting-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .setting-label { font-size: 12px; color: #888; min-width: 60px; }
+  .radio-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .radio-group label { padding: 4px 10px; border: 1px solid #2a2a35; border-radius: 6px; font-size: 11px; color: #999; cursor: pointer; transition: all 0.2s; }
+  .radio-group label:has(input:checked) { background: rgba(0,170,255,0.12); border-color: rgba(0,170,255,0.3); color: #0af; }
+  .radio-group input { display: none; }
+
+  .checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #999; cursor: pointer; }
+  .checkbox-label input { accent-color: #0af; }
+
+  .stats-row { display: flex; gap: 16px; padding-top: 12px; border-top: 1px solid #1e1e2e; }
+  .stat { display: flex; flex-direction: column; align-items: center; }
+  .stat-val { font-size: 14px; font-weight: 700; color: #0af; font-family: monospace; }
+  .stat-lbl { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .btn-save { padding: 6px 16px; border: 1px solid rgba(0,170,255,0.3); border-radius: 6px; background: rgba(0,170,255,0.08); color: #0af; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; }
+  .btn-save:hover { background: rgba(0,170,255,0.15); }
+
+  /* ── Messages Feed ── */
+  .messages { background: #12121a; border: 1px solid #1e1e2e; border-radius: 12px; padding: 16px; margin-bottom: 16px; min-height: 200px; max-height: 400px; overflow-y: auto; }
+  .messages:empty::before { content: 'Waiting for agent messages...'; color: #444; font-size: 13px; }
+  .msg { padding: 8px 12px; margin-bottom: 8px; border-radius: 8px; font-size: 13px; line-height: 1.5; animation: fadeIn 0.3s; }
+  .msg.agent { background: #1a1a2e; color: #ddd; border-left: 3px solid #0af; }
+  .msg.user { background: #1a2e1a; color: #bbb; border-left: 3px solid #22c55e; text-align: right; }
+  .msg .ts { font-size: 10px; color: #555; margin-top: 2px; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ── Action Buttons ── */
+  .actions { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .btn { padding: 10px 20px; border: 1px solid #2a2a35; border-radius: 8px; background: #16161c; color: #ccc; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+  .btn:hover { border-color: #0af; color: #0af; }
+  .btn.primary { border-color: rgba(0,170,255,0.3); background: rgba(0,170,255,0.08); color: #0af; }
+  .btn.primary:hover { background: rgba(0,170,255,0.15); }
+  .btn.danger { border-color: rgba(239,68,68,0.3); color: #ef4444; }
+  .btn.danger:hover { background: rgba(239,68,68,0.08); }
+  .btn.streaming { border-color: rgba(239,68,68,0.5); background: rgba(239,68,68,0.1); color: #ef4444; animation: streamPulse 2s infinite; }
+  @keyframes streamPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } 50% { box-shadow: 0 0 12px 0 rgba(239,68,68,0.2); } }
+
+  /* ── Quick Responses ── */
+  .quick-responses { display: flex; gap: 8px; flex-wrap: wrap; }
+  .quick-btn { padding: 6px 16px; border: 1px solid #2a2a35; border-radius: 20px; background: transparent; color: #aaa; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+  .quick-btn:hover { border-color: #22c55e; color: #22c55e; }
+
+  /* ── PiP Overlay ── */
+  .pip-overlay {
+    display: none; position: fixed; bottom: 16px; right: 16px; z-index: 99999;
+    width: 220px; background: #16161c; border: 1px solid #2a2a35;
+    border-radius: 12px; padding: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    font-family: -apple-system, system-ui, sans-serif; cursor: move; user-select: none;
+  }
+  .pip-overlay.visible { display: block; }
+  .pip-stats { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #888; margin-bottom: 6px; }
+  .pip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .pip-dot.live { background: #22c55e; }
+  .pip-dot.off { background: #ef4444; }
+  .pip-thumb { width: 100%; height: 80px; background: #0a0a0f; border-radius: 6px; margin-bottom: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .pip-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .pip-thumb .no-stream { font-size: 11px; color: #444; }
+  .pip-msg { font-size: 11px; color: #aaa; line-height: 1.4; margin-bottom: 8px; max-height: 32px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .pip-actions { display: flex; gap: 6px; }
+  .pip-btn { flex: 1; padding: 5px 0; border: 1px solid #2a2a35; border-radius: 6px; background: transparent; color: #aaa; cursor: pointer; font-size: 11px; text-align: center; transition: all 0.15s; }
+  .pip-btn:hover { border-color: #0af; color: #0af; }
+  .pip-btn.stop { color: #ef4444; }
+  .pip-btn.stop:hover { border-color: #ef4444; }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <h1>👁️ VelBridge Observe</h1>
+    <div class="label" id="sessionLabel">__SESSION_LABEL__</div>
+    <div class="session-id">Session: __SESSION_ID__</div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="status-dot waiting" id="statusDot"></div>
+    <div class="status-text" id="statusText">Connecting...</div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings">
+    <div class="settings-header" onclick="toggleSettings()">
+      <h2>⚙️ Settings</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn-save" id="saveBtn" onclick="event.stopPropagation();saveSettings()">Save</button>
+        <span class="settings-toggle" id="settingsToggle">▾</span>
+      </div>
+    </div>
+    <div class="settings-body" id="settingsBody">
+      <div class="setting-row">
+        <span class="setting-label">Quality</span>
+        <div class="radio-group" id="qualityGroup">
+          <label><input type="radio" name="quality" value="auto"> Auto</label>
+          <label><input type="radio" name="quality" value="low"> Low <small style="color:#666">(1fps 480p)</small></label>
+          <label><input type="radio" name="quality" value="high"> High <small style="color:#666">(5fps 1080p)</small></label>
+          <label><input type="radio" name="quality" value="screenshots_only"> Screenshots Only</label>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Audio</span>
+        <label class="checkbox-label"><input type="checkbox" id="tabAudio"> Tab audio</label>
+        <label class="checkbox-label"><input type="checkbox" id="sysAudio"> System audio</label>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">Timeout</span>
+        <label class="checkbox-label"><input type="checkbox" id="persistent"> Persistent <small style="color:#666">(unchecked = 30s auto-disconnect)</small></label>
+      </div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-val" id="statStatus">—</div><div class="stat-lbl">Status</div></div>
+        <div class="stat"><div class="stat-val" id="statFPS">0</div><div class="stat-lbl">FPS</div></div>
+        <div class="stat"><div class="stat-val" id="statRate">0</div><div class="stat-lbl">KB/s</div></div>
+        <div class="stat"><div class="stat-val" id="statTotal">0</div><div class="stat-lbl">Total</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Messages Feed -->
+  <div class="messages" id="messages"></div>
+
+  <!-- Action Buttons -->
+  <div class="actions">
+    <button class="btn primary" id="screenshotBtn" onclick="sendScreenshot()">📸 Send Screenshot</button>
+    <button class="btn" id="streamBtn" onclick="toggleStream()">▶ Start Stream</button>
+  </div>
+
+  <!-- Quick Responses -->
+  <div class="quick-responses" id="quickResponses">
+    <button class="quick-btn" onclick="sendResponse('Yes')">Yes</button>
+    <button class="quick-btn" onclick="sendResponse('No')">No</button>
+    <button class="quick-btn" onclick="sendResponse('Done')">Done</button>
+  </div>
+</div>
+
+<!-- PiP Overlay -->
+<div class="pip-overlay" id="pipOverlay">
+  <div class="pip-stats">
+    <div class="pip-dot" id="pipDot"></div>
+    <span id="pipStatsText">Connecting...</span>
+  </div>
+  <div class="pip-thumb" id="pipThumb">
+    <span class="no-stream">No stream</span>
+  </div>
+  <div class="pip-msg" id="pipMsg">Waiting for agent...</div>
+  <div class="pip-actions">
+    <button class="pip-btn" onclick="sendScreenshot()" title="Send Screenshot">📸</button>
+    <button class="pip-btn" onclick="returnToObserve()" title="Return to Observe">↩ Return</button>
+    <button class="pip-btn stop" onclick="endSession()" title="Stop Session">⏹</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Config ──
+  var SESSION_ID = '__SESSION_ID__';
+  var SESSION_MODE = '__SESSION_MODE__';
+  var INIT_QUALITY = '__SESSION_QUALITY__' || 'auto';
+  var INIT_TAB_AUDIO = '__SESSION_TAB_AUDIO__' === 'true';
+  var INIT_SYS_AUDIO = '__SESSION_SYS_AUDIO__' === 'true';
+  var INIT_PERSISTENT = '__SESSION_PERSISTENT__' === 'true';
+
+  // ── State ──
+  var ws = null;
+  var agentConnected = false;
+  var streaming = false;
+  var displayStream = null;
+  var frameInterval = null;
+  var totalBytes = 0;
+  var frameCount = 0;
+  var rateBytes = 0;
+  var rateTimer = null;
+  var latestMessage = 'Waiting for agent...';
+  var pageVisible = true;
+
+  // ── DOM ──
+  var $ = function(id) { return document.getElementById(id); };
+  var statusDot = $('statusDot');
+  var statusText = $('statusText');
+  var messages = $('messages');
+  var streamBtn = $('streamBtn');
+  var pipOverlay = $('pipOverlay');
+  var pipDot = $('pipDot');
+  var pipStatsText = $('pipStatsText');
+  var pipThumb = $('pipThumb');
+  var pipMsg = $('pipMsg');
+
+  // ── Init Settings ──
+  function initSettings() {
+    var radios = document.querySelectorAll('input[name="quality"]');
+    radios.forEach(function(r) { r.checked = r.value === INIT_QUALITY; });
+    $('tabAudio').checked = INIT_TAB_AUDIO;
+    $('sysAudio').checked = INIT_SYS_AUDIO;
+    $('persistent').checked = INIT_PERSISTENT;
+  }
+  initSettings();
+
+  function getQuality() {
+    var checked = document.querySelector('input[name="quality"]:checked');
+    return checked ? checked.value : 'auto';
+  }
+
+  function getQualityConfig() {
+    var q = getQuality();
+    switch (q) {
+      case 'low': return { fps: 1, width: 854, height: 480 };
+      case 'high': return { fps: 5, width: 1920, height: 1080 };
+      case 'screenshots_only': return null;
+      default: return { fps: 2, width: 1280, height: 720 }; // auto
+    }
+  }
+
+  // ── Settings UI ──
+  var settingsCollapsed = false;
+  window.toggleSettings = function() {
+    settingsCollapsed = !settingsCollapsed;
+    $('settingsBody').classList.toggle('collapsed', settingsCollapsed);
+    $('settingsToggle').textContent = settingsCollapsed ? '▸' : '▾';
+  };
+
+  window.saveSettings = function() {
+    var settings = {
+      quality: getQuality(),
+      tab_audio: $('tabAudio').checked,
+      sys_audio: $('sysAudio').checked,
+      persistent: $('persistent').checked,
+      timeout: $('persistent').checked ? 0 : 30
+    };
+    fetch('/api/bridge/observe/settings', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    }).then(function() {
+      $('saveBtn').textContent = '✓ Saved';
+      setTimeout(function() { $('saveBtn').textContent = 'Save'; }, 2000);
+    });
+  };
+
+  // ── Status Updates ──
+  function setStatus(state, text) {
+    statusDot.className = 'status-dot ' + state;
+    statusText.textContent = text;
+    $('statStatus').textContent = state === 'live' ? '🟢' : state === 'waiting' ? '🟡' : '🔴';
+    // PiP
+    pipDot.className = 'pip-dot ' + (state === 'live' ? 'live' : 'off');
+  }
+
+  function updateStats() {
+    var fps = streaming ? frameCount : 0;
+    var rate = (rateBytes / 1024).toFixed(1);
+    var total = totalBytes < 1048576
+      ? (totalBytes / 1024).toFixed(0) + ' KB'
+      : (totalBytes / 1048576).toFixed(1) + ' MB';
+
+    $('statFPS').textContent = fps;
+    $('statRate').textContent = rate;
+    $('statTotal').textContent = total;
+
+    // PiP stats
+    pipStatsText.textContent = (streaming ? fps + 'fps • ' + rate + 'KB/s' : 'Paused') +
+      (agentConnected ? '' : ' • No agent');
+
+    frameCount = 0;
+    rateBytes = 0;
+  }
+
+  // ── Messages ──
+  function addMessage(text, role, buttons) {
+    var div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.innerHTML = '<div>' + escapeHtml(text) + '</div><div class="ts">' + new Date().toLocaleTimeString() + '</div>';
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+
+    if (role === 'agent') {
+      latestMessage = text;
+      pipMsg.textContent = text;
+    }
+
+    // Custom buttons from agent
+    if (buttons && buttons.length && role === 'agent') {
+      var qr = $('quickResponses');
+      qr.innerHTML = '';
+      buttons.forEach(function(b) {
+        var btn = document.createElement('button');
+        btn.className = 'quick-btn';
+        btn.textContent = b;
+        btn.onclick = function() { sendResponse(b); };
+        qr.appendChild(btn);
+      });
+    }
+  }
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  // ── WebSocket ──
+  function connectWS() {
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(proto + '//' + location.host + '/bridge/observe/_ws?session=' + SESSION_ID);
+
+    ws.onopen = function() {
+      setStatus('waiting', 'Connected. Waiting for agent...');
+    };
+
+    ws.onclose = function() {
+      setStatus('disconnected', 'Disconnected. Reconnecting...');
+      agentConnected = false;
+      setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = function() {};
+
+    ws.onmessage = function(event) {
+      var msg = JSON.parse(event.data);
+      switch (msg.type) {
+        case 'init':
+          if (msg.agent_connected) {
+            agentConnected = true;
+            setStatus('live', 'Agent connected');
+          }
+          if (msg.latest_message) {
+            addMessage(msg.latest_message, 'agent');
+          }
+          break;
+
+        case 'agent_connected':
+          agentConnected = msg.status;
+          setStatus(agentConnected ? 'live' : 'waiting',
+            agentConnected ? 'Agent connected' : 'Agent disconnected');
+          break;
+
+        case 'agent_message':
+          addMessage(msg.text, 'agent', msg.buttons);
+          break;
+
+        case 'take_screenshot':
+          sendScreenshot();
+          break;
+
+        case 'session_ended':
+          setStatus('disconnected', 'Session ended');
+          streaming = false;
+          if (displayStream) { displayStream.getTracks().forEach(function(t) { t.stop(); }); displayStream = null; }
+          break;
+
+        case 'ping':
+          if (ws) ws.send(JSON.stringify({ type: 'pong' }));
+          break;
+      }
+    };
+  }
+
+  // ── Screenshot ──
+  window.sendScreenshot = async function() {
+    var screenshotBtn = $('screenshotBtn');
+    screenshotBtn.textContent = '⏳ Capturing...';
+    screenshotBtn.disabled = true;
+
+    try {
+      var result = await captureFrame();
+      if (result && result.data) {
+        ws.send(JSON.stringify({
+          type: 'screenshot',
+          data: result.data,
+          method: result.method
+        }));
+        addMessage('📸 Screenshot sent (' + result.method + ')', 'user');
+        totalBytes += result.data.length;
+      }
+    } catch(e) {
+      addMessage('❌ Screenshot failed: ' + e.message, 'user');
+    }
+
+    screenshotBtn.textContent = '📸 Send Screenshot';
+    screenshotBtn.disabled = false;
+  };
+
+  async function captureFrame() {
+    // Primary: getDisplayMedia
+    try {
+      if (!displayStream || !displayStream.active) {
+        var constraints = { video: { preferCurrentTab: true }, preferCurrentTab: true };
+        if ($('tabAudio').checked || $('sysAudio').checked) {
+          constraints.audio = true;
+        }
+        displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+        displayStream.getVideoTracks()[0].addEventListener('ended', function() {
+          displayStream = null;
+          if (streaming) stopStream();
+        });
+      }
+
+      var track = displayStream.getVideoTracks()[0];
+      var surface = (track.getSettings().displaySurface) || 'unknown';
+
+      // ImageCapture path
+      if (typeof ImageCapture !== 'undefined') {
+        var capture = new ImageCapture(track);
+        var bitmap = await capture.grabFrame();
+        var canvas = document.createElement('canvas');
+        canvas.width = bitmap.width; canvas.height = bitmap.height;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0);
+        return { data: canvas.toDataURL('image/jpeg', 0.85), method: 'native', surface: surface };
+      }
+
+      // Video element fallback
+      var video = document.createElement('video');
+      video.srcObject = displayStream; video.muted = true;
+      await video.play();
+      await new Promise(function(r) { requestAnimationFrame(r); });
+      var canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      canvas.getContext('2d').drawImage(video, 0, 0);
+      video.pause(); video.srcObject = null;
+      return { data: canvas.toDataURL('image/jpeg', 0.85), method: 'native', surface: surface };
+    } catch(e) {
+      // Fall through to html2canvas
+    }
+
+    // Fallback: html2canvas — only works on the observe page itself (limited use)
+    if (typeof html2canvas === 'function') {
+      try {
+        var canvas = await html2canvas(document.body, { useCORS: true, scale: 1 });
+        return { data: canvas.toDataURL('image/jpeg', 0.85), method: 'html2canvas' };
+      } catch(e) {}
+    }
+
+    throw new Error('No screenshot method available. Allow screen sharing when prompted.');
+  }
+
+  // ── Streaming ──
+  window.toggleStream = function() {
+    if (streaming) {
+      stopStream();
+    } else {
+      startStream();
+    }
+  };
+
+  async function startStream() {
+    var qc = getQualityConfig();
+    if (!qc) {
+      addMessage('Quality set to "Screenshots Only" — use 📸 button instead.', 'user');
+      return;
+    }
+
+    try {
+      if (!displayStream || !displayStream.active) {
+        var constraints = { video: { preferCurrentTab: true }, preferCurrentTab: true };
+        if ($('tabAudio').checked || $('sysAudio').checked) {
+          constraints.audio = true;
+        }
+        displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+        displayStream.getVideoTracks()[0].addEventListener('ended', function() {
+          displayStream = null;
+          stopStream();
+        });
+      }
+    } catch(e) {
+      addMessage('❌ Screen sharing denied: ' + e.message, 'user');
+      return;
+    }
+
+    streaming = true;
+    streamBtn.textContent = '⏹ Stop Stream';
+    streamBtn.classList.add('streaming');
+
+    ws.send(JSON.stringify({ type: 'stream_started' }));
+    addMessage('▶ Stream started (' + qc.fps + 'fps)', 'user');
+
+    // Capture and send frames at configured FPS
+    var interval = 1000 / qc.fps;
+    frameInterval = setInterval(async function() {
+      if (!streaming || !displayStream || !displayStream.active) { stopStream(); return; }
+      try {
+        var result = await captureFrame();
+        if (result && result.data && ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'frame', data: result.data }));
+          frameCount++;
+          var size = result.data.length;
+          totalBytes += size;
+          rateBytes += size;
+
+          // Update PiP thumbnail
+          if (!pageVisible) {
+            var img = pipThumb.querySelector('img');
+            if (!img) {
+              pipThumb.innerHTML = '';
+              img = document.createElement('img');
+              pipThumb.appendChild(img);
+            }
+            img.src = result.data;
+          }
+        }
+      } catch(e) {}
+    }, interval);
+  }
+
+  function stopStream() {
+    streaming = false;
+    if (frameInterval) { clearInterval(frameInterval); frameInterval = null; }
+    streamBtn.textContent = '▶ Start Stream';
+    streamBtn.classList.remove('streaming');
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'stream_stopped' }));
+    }
+    addMessage('⏹ Stream stopped', 'user');
+  }
+
+  // ── Quick Responses ──
+  window.sendResponse = function(text) {
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'user_message', text: text }));
+      addMessage(text, 'user');
+    }
+  };
+
+  window.endSession = function() {
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'user_message', text: 'Session ended by user' }));
+    }
+    stopStream();
+    if (displayStream) { displayStream.getTracks().forEach(function(t) { t.stop(); }); displayStream = null; }
+    setStatus('disconnected', 'Session ended');
+  };
+
+  window.returnToObserve = function() {
+    window.focus();
+    window.scrollTo(0, 0);
+  };
+
+  // ── PiP Overlay (visibility change) ──
+  var pipDragState = { active: false, startX: 0, startY: 0, origX: 0, origY: 0 };
+
+  document.addEventListener('visibilitychange', function() {
+    pageVisible = !document.hidden;
+    pipOverlay.classList.toggle('visible', !pageVisible && (agentConnected || streaming));
+  });
+
+  // Also show PiP on window blur (user switches tabs)
+  window.addEventListener('blur', function() {
+    pageVisible = false;
+    pipOverlay.classList.toggle('visible', agentConnected || streaming);
+  });
+  window.addEventListener('focus', function() {
+    pageVisible = true;
+    pipOverlay.classList.remove('visible');
+  });
+
+  // Draggable PiP
+  pipOverlay.addEventListener('mousedown', function(e) {
+    if (e.target.tagName === 'BUTTON') return;
+    pipDragState.active = true;
+    pipDragState.startX = e.clientX;
+    pipDragState.startY = e.clientY;
+    var rect = pipOverlay.getBoundingClientRect();
+    pipDragState.origX = rect.left;
+    pipDragState.origY = rect.top;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!pipDragState.active) return;
+    var dx = e.clientX - pipDragState.startX;
+    var dy = e.clientY - pipDragState.startY;
+    var newX = pipDragState.origX + dx;
+    var newY = pipDragState.origY + dy;
+    // Clamp to viewport
+    newX = Math.max(0, Math.min(window.innerWidth - 220, newX));
+    newY = Math.max(0, Math.min(window.innerHeight - 180, newY));
+    pipOverlay.style.left = newX + 'px';
+    pipOverlay.style.top = newY + 'px';
+    pipOverlay.style.right = 'auto';
+    pipOverlay.style.bottom = 'auto';
+  });
+
+  document.addEventListener('mouseup', function() {
+    pipDragState.active = false;
+  });
+
+  // Touch support for PiP drag
+  pipOverlay.addEventListener('touchstart', function(e) {
+    if (e.target.tagName === 'BUTTON') return;
+    pipDragState.active = true;
+    pipDragState.startX = e.touches[0].clientX;
+    pipDragState.startY = e.touches[0].clientY;
+    var rect = pipOverlay.getBoundingClientRect();
+    pipDragState.origX = rect.left;
+    pipDragState.origY = rect.top;
+  });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!pipDragState.active) return;
+    var dx = e.touches[0].clientX - pipDragState.startX;
+    var dy = e.touches[0].clientY - pipDragState.startY;
+    var newX = Math.max(0, Math.min(window.innerWidth - 220, pipDragState.origX + dx));
+    var newY = Math.max(0, Math.min(window.innerHeight - 180, pipDragState.origY + dy));
+    pipOverlay.style.left = newX + 'px';
+    pipOverlay.style.top = newY + 'px';
+    pipOverlay.style.right = 'auto';
+    pipOverlay.style.bottom = 'auto';
+  });
+
+  document.addEventListener('touchend', function() { pipDragState.active = false; });
+
+  // ── Stats Timer ──
+  rateTimer = setInterval(updateStats, 1000);
+
+  // ── Autostart ──
+  var params = new URLSearchParams(window.location.search);
+  var autostart = params.get('autostart') === 'true';
+  var modeParam = params.get('mode') || SESSION_MODE;
+  var fpsParam = parseInt(params.get('fps')) || 0;
+
+  // ── Init ──
+  connectWS();
+
+  if (autostart) {
+    setTimeout(function() {
+      if (modeParam === 'stream') {
+        startStream();
+      } else if (modeParam === 'screenshot') {
+        sendScreenshot();
+      }
+    }, 1000);
+  }
+})();
+</script>
+<script src="/bridge/proxy/_core/bridge/html2canvas.min.js"></script>
+</body>
+</html>

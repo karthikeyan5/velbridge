@@ -68,7 +68,7 @@ func deriveWSURL(r *http.Request) string {
 			scheme = "ws"
 		}
 	}
-	return fmt.Sprintf("%s://%s/relay/ws", scheme, r.Host)
+	return fmt.Sprintf("%s://%s/bridge/debug/ws", scheme, r.Host)
 }
 
 // HandleBridge serves the bridge HTML page.
@@ -147,6 +147,12 @@ const bridgeHTML = `<!DOCTYPE html>
   .code-hint { font-size: 13px; color: #888; margin-bottom: 4px; }
   .tg-link { display: inline-block; background: rgba(0,170,255,0.1); border: 1px solid rgba(0,170,255,0.2); border-radius: 8px; padding: 10px 20px; color: #0af; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 8px; transition: all 0.2s; }
   .tg-link:hover { background: rgba(0,170,255,0.2); }
+  .btn-agent { display: inline-block; background: rgba(201,168,76,0.12); border: 1px solid #c9a84c; border-radius: 8px; padding: 10px 20px; color: #c9a84c; cursor: pointer; font-weight: 600; font-size: 14px; margin-top: 8px; transition: all 0.2s; margin-right: 8px; }
+  .btn-agent:hover { background: rgba(201,168,76,0.22); }
+  .btn-agent.copied { background: rgba(34,197,94,0.15); border-color: #22c55e; color: #22c55e; }
+  @keyframes copiedPop { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+  .pop { animation: copiedPop 0.3s ease-out; }
+  .pair-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
   .waiting-dots { animation: pulse 1.5s infinite; }
 </style>
 </head>
@@ -205,16 +211,33 @@ const bridgeHTML = `<!DOCTYPE html>
   function start() {
     if (relayToken) {
       setStatus('🔑', 'Reconnecting...', 'Using saved session');
-      fetch(ORIGIN + '/relay/cdp/status?token=' + relayToken)
+      fetch(ORIGIN + '/bridge/debug/cdp/status?token=' + relayToken)
         .then(function(r) { return r.ok ? r.json() : Promise.reject('bad'); })
         .then(function(d) {
           if (d.state !== undefined) { waitForWSURL(); }
-          else { clearToken(); startPairing(); }
+          else { clearToken(); start(); }
         })
-        .catch(function() { clearToken(); startPairing(); });
+        .catch(function() { clearToken(); start(); });
       return;
     }
-    startPairing();
+    // Try session auth (skip pairing if user is logged in)
+    trySessionAuth();
+  }
+
+  function trySessionAuth() {
+    fetch(ORIGIN + '/bridge/debug/connect/session', { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok && d.relayToken) {
+          relayToken = d.relayToken;
+          localStorage.setItem('openclaw_relay_token', relayToken);
+          setStatus('✅', 'Authenticated', 'Signed in as ' + d.userId + ' — connecting to browser...');
+          waitForWSURL();
+        } else {
+          startPairing();
+        }
+      })
+      .catch(function() { startPairing(); });
   }
 
   function clearToken() {
@@ -226,7 +249,7 @@ const bridgeHTML = `<!DOCTYPE html>
     setStatus('🔗', 'Pairing required', '', 'pairing');
     $('pairingUI').classList.remove('hidden');
 
-    fetch(ORIGIN + '/relay/pair/new')
+    fetch(ORIGIN + '/bridge/debug/pair/new')
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) {
@@ -236,11 +259,20 @@ const bridgeHTML = `<!DOCTYPE html>
         var code = d.code;
         var pairingToken = d.token;
 
+        var agentMsg = '🔗 VelBridge Pairing Request\n\nCode: ' + code + '\nServer: ' + ORIGIN + '\n\nTo activate, call:\nPOST ' + ORIGIN + '/bridge/debug/pair/activate\nAuthorization: Bearer <your-bot-token>\nContent-Type: application/json\nBody: {"code": "' + code + '", "userId": <your-telegram-user-id>}\n\nThis connects my browser to VelBridge for debugging/proxy/observe features.';
+        var tgText = encodeURIComponent(agentMsg);
+        var tgShareUrl = 'https://t.me/share/url?url=' + encodeURIComponent(' ') + '&text=' + tgText;
+
         $('pairingUI').innerHTML =
           '<div class="code">' + code + '</div>' +
-          '<div class="code-hint">Send this code to Ram on Telegram</div>' +
-          '<a class="tg-link" href="https://t.me/' + BOT + '?start=pair_' + code + '" target="_blank">💬 Open Telegram</a>' +
+          '<div class="code-hint">Send this code to your AI agent</div>' +
+          '<div class="pair-btns">' +
+            '<button class="btn-agent" id="copyAgentBtn" onclick="copyForAgent()">📋 Copy for Agent</button>' +
+            '<a class="tg-link" href="' + tgShareUrl + '" target="_blank">💬 Send to Telegram</a>' +
+          '</div>' +
           '<div class="code-hint" style="margin-top:16px"><span class="waiting-dots">⏳</span> Waiting for pairing...</div>';
+
+        window._agentMsg = agentMsg;
 
         pollPairing(pairingToken, 0);
       })
@@ -257,7 +289,7 @@ const bridgeHTML = `<!DOCTYPE html>
       return;
     }
     setTimeout(function() {
-      fetch(ORIGIN + '/relay/pair/status?token=' + pairingToken)
+      fetch(ORIGIN + '/bridge/debug/pair/status?token=' + pairingToken)
         .then(function(r) { return r.json(); })
         .then(function(d) {
           if (d.activated && d.relayToken) {
@@ -290,7 +322,7 @@ const bridgeHTML = `<!DOCTYPE html>
       return;
     }
     setTimeout(function() {
-      fetch(ORIGIN + '/relay/cdp-info?launcher=' + launcherID)
+      fetch(ORIGIN + '/bridge/debug/cdp-info?launcher=' + launcherID)
         .then(function(r) { return r.json(); })
         .then(function(d) {
           if (d.wsUrl) {
@@ -378,6 +410,10 @@ const bridgeHTML = `<!DOCTYPE html>
         sessionMap[sessionId] = targetId;
         targetMap[targetId] = sessionId;
         console.log('[bridge] attached', targetId, 'session', sessionId);
+        // Forward to relay so CDP proxy can complete the attach handshake
+        if (relayWS && relayWS.readyState === 1) {
+          relayWS.send(JSON.stringify({ type: 'cdp', targetId: targetId, data: msg }));
+        }
         return;
       }
 
@@ -429,7 +465,7 @@ const bridgeHTML = `<!DOCTYPE html>
   function connectRelay() {
     var wsScheme = ORIGIN.startsWith('https') ? 'wss' : 'ws';
     var wsHost = ORIGIN.replace(/^https?:\/\//, '');
-    var relayURL = wsScheme + '://' + wsHost + '/relay/ws';
+    var relayURL = wsScheme + '://' + wsHost + '/bridge/debug/ws';
 
     setStatus('🔗', 'Connecting to relay...', '');
     relayWS = new WebSocket(relayURL + '?token=' + relayToken);
@@ -438,6 +474,14 @@ const bridgeHTML = `<!DOCTYPE html>
       relayFailCount = 0;
       setStatus('✅', 'Connected!', 'Waiting for your AI...', 'connected');
       refreshTargets();
+      // Re-post CDP info so server knows our browser WS URL after restart
+      if (browserWSURL && launcherID) {
+        fetch(ORIGIN + '/bridge/debug/cdp-info?launcher=' + launcherID, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({wsUrl: browserWSURL})
+        });
+      }
     };
 
     relayWS.onmessage = function(e) {
@@ -494,6 +538,19 @@ const bridgeHTML = `<!DOCTYPE html>
     relayWS.onerror = function() {};
   }
 
+  window.copyForAgent = function() {
+    var msg = window._agentMsg || '';
+    if (!msg) return;
+    navigator.clipboard.writeText(msg).then(function() {
+      var btn = document.getElementById('copyAgentBtn');
+      if (btn) { btn.classList.add('copied', 'pop'); btn.textContent = '✅ Copied!'; setTimeout(function() { btn.classList.remove('copied', 'pop'); btn.textContent = '📋 Copy for Agent'; }, 2000); }
+    }).catch(function() {
+      var ta = document.createElement('textarea'); ta.value = msg; ta.style.cssText = 'position:fixed;top:-9999px;'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      var btn = document.getElementById('copyAgentBtn');
+      if (btn) { btn.classList.add('copied', 'pop'); btn.textContent = '✅ Copied!'; setTimeout(function() { btn.classList.remove('copied', 'pop'); btn.textContent = '📋 Copy for Agent'; }, 2000); }
+    });
+  };
+
   window.disconnect = function() {
     if (relayWS) { relayWS.close(); relayWS = null; }
     if (browserWS) { browserWS.close(); browserWS = null; }
@@ -531,7 +588,7 @@ echo "🌐 Launching browser..."
     "--remote-allow-origins=$SERVER" \
     --user-data-dir="$HOME/OpenClawBrowser" \
     --no-first-run \
-    "$SERVER/relay/bridge?launcher=$LAUNCHER_ID" 2>/dev/null &
+    "$SERVER/bridge/debug/bridge?launcher=$LAUNCHER_ID" 2>/dev/null &
 BROWSER_PID=$!
 
 # Wait for CDP to be ready and get browser WS URL
@@ -555,7 +612,7 @@ if [ -z "$BROWSER_WS" ]; then
 fi
 
 # Send WS URL to server so bridge page can pick it up
-curl -s -X POST "$SERVER/relay/cdp-info?launcher=$LAUNCHER_ID" \
+curl -s -X POST "$SERVER/bridge/debug/cdp-info?launcher=$LAUNCHER_ID" \
     -H "Content-Type: application/json" \
     -d "{\"wsUrl\":\"$BROWSER_WS\"}" > /dev/null
 
@@ -589,7 +646,7 @@ echo "🌐 Launching browser..."
     "--remote-allow-origins=$SERVER" \
     --user-data-dir="$HOME/OpenClawBrowser" \
     --no-first-run \
-    "$SERVER/relay/bridge?launcher=$LAUNCHER_ID" 2>/dev/null &
+    "$SERVER/bridge/debug/bridge?launcher=$LAUNCHER_ID" 2>/dev/null &
 BROWSER_PID=$!
 
 echo -n "⏳ Waiting for CDP"
@@ -606,7 +663,7 @@ done
 echo ""
 if [ -z "$BROWSER_WS" ]; then echo "❌ CDP not ready"; kill $BROWSER_PID 2>/dev/null; exit 1; fi
 
-curl -s -X POST "$SERVER/relay/cdp-info?launcher=$LAUNCHER_ID" \
+curl -s -X POST "$SERVER/bridge/debug/cdp-info?launcher=$LAUNCHER_ID" \
     -H "Content-Type: application/json" \
     -d "{\"wsUrl\":\"$BROWSER_WS\"}" > /dev/null
 
@@ -632,7 +689,7 @@ if "%%CHROME%%"=="" ( echo Chrome not found! & pause & exit /b 1 )
 
 for /f "usebackq delims=" %%%%i in (`+"`"+`powershell -Command "[guid]::NewGuid().ToString('N').Substring(0,16)"`+"`"+`) do set "LAUNCHER_ID=%%%%i"
 
-start "" "%%CHROME%%" --remote-debugging-port=9222 "--remote-allow-origins=%%SERVER%%" --user-data-dir="%%USERPROFILE%%\OpenClawBrowser" --no-first-run "%%SERVER%%/relay/bridge?launcher=%%LAUNCHER_ID%%"
+start "" "%%CHROME%%" --remote-debugging-port=9222 "--remote-allow-origins=%%SERVER%%" --user-data-dir="%%USERPROFILE%%\OpenClawBrowser" --no-first-run "%%SERVER%%/bridge/debug/bridge?launcher=%%LAUNCHER_ID%%"
 
 echo Waiting for CDP...
 :CDPWAIT
@@ -640,7 +697,7 @@ powershell -Command "Start-Sleep 1"
 for /f "usebackq delims=" %%%%i in (`+"`"+`powershell -Command "try { (Invoke-RestMethod 'http://localhost:9222/json/version').webSocketDebuggerUrl } catch { 'waiting' }"`+"`"+`) do set "BROWSER_WS=%%%%i"
 if "%%BROWSER_WS%%"=="waiting" goto CDPWAIT
 
-powershell -Command "Invoke-RestMethod -Method Post -Uri '%%SERVER%%/relay/cdp-info?launcher=%%LAUNCHER_ID%%' -ContentType 'application/json' -Body ('{\"wsUrl\":\"' + '%%BROWSER_WS%%' + '\"}')" >nul 2>&1
+powershell -Command "Invoke-RestMethod -Method Post -Uri '%%SERVER%%/bridge/debug/cdp-info?launcher=%%LAUNCHER_ID%%' -ContentType 'application/json' -Body ('{\"wsUrl\":\"' + '%%BROWSER_WS%%' + '\"}')" >nul 2>&1
 
 echo Ready! Complete pairing in the browser tab.
 echo Keep this window open.

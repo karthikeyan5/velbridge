@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 
 	vel "vel/pkg/vel"
 
 	"github.com/gorilla/websocket"
+	bolt "go.etcd.io/bbolt"
 )
 
 var upgrader = websocket.Upgrader{
@@ -20,16 +23,153 @@ type Relay struct {
 	sessions  *SessionManager
 	pairing   *PairingManager
 	launchers *launcherStore
+
+	// Proxy mode (v2)
+	proxySessions  *proxyManager
+	proxyWSClients *proxyWSManager
+
+	// Observe mode (v2)
+	observeSessions  *observeManager
+	observeWSClients *observeWSManager
+
+	// App directory (for serving static files)
+	appDir string
+
+	// OpenClaw integration
+	openclawGateway string
+	openclawToken   string
 }
 
-// New creates a new Relay instance.
+// New creates a new Relay instance (backward compat for tests).
 func New() *Relay {
-	sm := NewSessionManager()
-	return &Relay{
-		sessions:  sm,
-		pairing:   NewPairingManager(sm),
-		launchers: newLauncherStore(),
+	return NewFull("")
+}
+
+// NewFull creates a new Relay instance with all v2 features.
+func NewFull(appDir string) *Relay {
+	dataDir := "/tmp/velbridge"
+	if appDir != "" {
+		dataDir = appDir + "/data"
 	}
+
+	// Ensure data directory exists
+	os.MkdirAll(dataDir, 0o755)
+
+	// Open BoltDB for relay session persistence
+	dbPath := filepath.Join(dataDir, "relay.db")
+	db, err := bolt.Open(dbPath, 0o600, &bolt.Options{Timeout: 5 * time.Second})
+	if err != nil {
+		log.Printf("[relay] WARNING: could not open bolt DB at %s: %v (sessions won't persist)", dbPath, err)
+	}
+
+	sm := NewSessionManagerWithDB(db)
+
+	return &Relay{
+		sessions:         sm,
+		pairing:          NewPairingManager(sm),
+		launchers:        newLauncherStore(),
+		proxySessions:    newProxyManager(),
+		proxyWSClients:   newProxyWSManager(),
+		observeSessions:  newObserveManager(dataDir),
+		observeWSClients: newObserveWSManager(),
+		appDir:           appDir,
+	}
+}
+
+// jsonUnmarshal is a helper to avoid import cycles.
+func jsonUnmarshal(data []byte, v interface{}) error {
+	return json.Unmarshal(data, v)
+}
+
+// HandleV2Status returns combined status for the dashboard panel.
+func (rl *Relay) HandleV2Status(w http.ResponseWriter, r *http.Request) {
+	// Debug mode status
+	user := vel.Check(r)
+	debugStatus := map[string]interface{}{"state": "disconnected"}
+	if user != nil {
+		token := rl.sessions.GetOrCreateToken(user.ID)
+		sess := rl.sessions.GetByToken(token)
+		if sess != nil {
+			sess.mu.Lock()
+			browserConnected := sess.BrowserWS != nil
+			agentConnected := sess.AgentWS != nil
+			msgCount := sess.MsgCount
+			sess.mu.Unlock()
+
+			state := "disconnected"
+			if browserConnected && agentConnected {
+				state = "agent_active"
+			} else if browserConnected {
+				state = "connected"
+			}
+			debugStatus = map[string]interface{}{
+				"state":    state,
+				"msgCount": msgCount,
+			}
+
+			// Add connectedSince and targets for the panel
+			sess.mu.Lock()
+			connAt := sess.ConnectedAt
+			targets := sess.Targets
+			sess.mu.Unlock()
+
+			if !connAt.IsZero() && (browserConnected || agentConnected) {
+				debugStatus["connectedSince"] = connAt.Format(time.RFC3339)
+			}
+			if len(targets) > 0 {
+				debugStatus["targets"] = targets
+			}
+		}
+	}
+
+	// Proxy mode status
+	proxySessions := rl.proxySessions.List()
+	proxyList := make([]map[string]interface{}, 0, len(proxySessions))
+	for _, s := range proxySessions {
+		proxyList = append(proxyList, map[string]interface{}{
+			"id":     s.ID,
+			"domain": s.Domain,
+			"since":  s.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	// Observe mode status
+	observeSessions := rl.observeSessions.List()
+	observeList := make([]map[string]interface{}, 0, len(observeSessions))
+	for _, s := range observeSessions {
+		s.mu.Lock()
+		observeList = append(observeList, map[string]interface{}{
+			"id":               s.ID,
+			"mode":             s.Mode,
+			"label":            s.Label,
+			"user_connected":   s.UserConnected,
+			"agent_connected":  s.AgentConnected,
+			"data_transferred": s.DataTransferred,
+			"screenshot_count": s.ScreenshotCount,
+			"since":            s.CreatedAt.Format(time.RFC3339),
+		})
+		s.mu.Unlock()
+	}
+
+	observeHistory := rl.observeSessions.History()
+	historyList := make([]map[string]interface{}, 0, len(observeHistory))
+	for _, s := range observeHistory {
+		historyList = append(historyList, map[string]interface{}{
+			"id":    s.ID,
+			"label": s.Label,
+			"mode":  s.Mode,
+			"since": s.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"debug":           debugStatus,
+		"proxy_sessions":  proxyList,
+		"observe_sessions": observeList,
+		"observe_history": historyList,
+		"observe_settings": rl.observeSessions.settings,
+	})
 }
 
 // Envelope is the message format between browser/agent and relay.

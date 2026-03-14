@@ -50,7 +50,7 @@ func (rl *Relay) HandleCDPJsonVersion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wsScheme := deriveWSScheme(r)
-	wsURL := fmt.Sprintf("%s://%s/relay/cdp/ws?token=%s", wsScheme, r.Host, token)
+	wsURL := fmt.Sprintf("%s://%s/bridge/debug/cdp/ws?token=%s", wsScheme, r.Host, token)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -89,7 +89,7 @@ func (rl *Relay) HandleCDPJsonList(w http.ResponseWriter, r *http.Request) {
 	for i, t := range targets {
 		out[i] = cdpTarget{
 			CDPTarget:            t,
-			WebSocketDebuggerURL: fmt.Sprintf("%s://%s/relay/cdp/page/%s?token=%s", wsScheme, r.Host, t.ID, token),
+			WebSocketDebuggerURL: fmt.Sprintf("%s://%s/bridge/debug/cdp/page/%s?token=%s", wsScheme, r.Host, t.ID, token),
 		}
 	}
 

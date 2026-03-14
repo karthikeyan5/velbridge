@@ -1,9 +1,9 @@
 {
   "id": "browser-relay",
   "contractVersion": "1.0",
-  "name": "Browser Relay",
-  "version": "1.0.0",
-  "description": "Control your browser remotely via WebSocket relay",
+  "name": "VelBridge",
+  "version": "2.0.0",
+  "description": "Debug, Proxy, and Observe modes for browser control",
   "author": "core",
   "position": 100,
   "size": "full",

@@ -14,7 +14,7 @@ Usage:
         print(b.read_page())
 
 ⚠️  NEVER navigate existing tabs blindly — one of them is the bridge tab.
-    Always use new_tab() or filter targets (skip URLs containing /relay/bridge).
+    Always use new_tab() or filter targets (skip URLs containing /bridge/debug/bridge).
 """
 
 import asyncio
@@ -166,7 +166,7 @@ class Browser:
 
     def _ws_url(self) -> str:
         base = self.server.replace("http://", "ws://").replace("https://", "wss://")
-        return f"{base}/relay/cdp/ws?token={self.relay_token}"
+        return f"{base}/bridge/debug/cdp/ws?token={self.relay_token}"
 
     def _next_id(self) -> int:
         self._msg_id += 1

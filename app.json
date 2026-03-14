@@ -1,11 +1,11 @@
 {
   "name": "velbridge",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "title": "VelBridge",
-  "description": "Browser relay for OpenClaw agents",
+  "description": "Four ways your agent controls any browser — Debug, Proxy, Observe, Diff",
   "panels": "panels",
   "routes": {
-    "/relay/connect": {
+    "/bridge/debug/connect": {
       "type": "page",
       "dir": "pages/relay-connect"
     }
@@ -15,6 +15,9 @@
   },
   "capabilities": {
     "net": {},
-    "github.com/gorilla/websocket": {}
+    "read": {},
+    "write": {},
+    "github.com/gorilla/websocket": {},
+    "go.etcd.io/bbolt": {}
   }
 }

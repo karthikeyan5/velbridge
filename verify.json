@@ -2,9 +2,9 @@
   "checks": [
     {
       "type": "http_get",
-      "path": "/relay/connect",
+      "path": "/bridge/debug/connect",
       "expect_status": 200,
-      "hint": "VelBridge relay connect page serves download/pairing info (relay paths are public, use their own token system)."
+      "hint": "VelBridge debug connect page serves download/pairing info (bridge paths are public, use their own token system)."
     },
     {
       "type": "file_exists",

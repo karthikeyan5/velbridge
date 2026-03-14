@@ -2,18 +2,43 @@ package server
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
 	vel "vel/pkg/vel"
 )
 
+// HandleConnectSession returns a relay token if the user is already authenticated via session cookie.
+// This allows skipping the pairing flow entirely.
+func (rl *Relay) HandleConnectSession(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	user := vel.Check(r)
+	if user == nil || (user.ID == 0 && user.Username == "") {
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": "not authenticated"})
+		return
+	}
+
+	token := rl.sessions.GetOrCreateToken(user.ID)
+	resp := map[string]interface{}{
+		"ok":         true,
+		"relayToken": token,
+	}
+	if user.Username != "" {
+		resp["userId"] = user.Username
+	} else {
+		resp["userId"] = user.ID
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
 // HandlePairNew creates a new pairing code. No auth required.
 func (rl *Relay) HandlePairNew(w http.ResponseWriter, r *http.Request) {
 	code, token, expiresAt, err := rl.pairing.NewPairing()
 	if err != nil {
+		log.Printf("[pairing] new pairing failed: %v", err)
 		w.WriteHeader(429)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		json.NewEncoder(w).Encode(map[string]string{"error": "too many pairing requests"})
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -85,8 +110,9 @@ func (rl *Relay) HandlePairActivate(w http.ResponseWriter, r *http.Request) {
 
 	relayToken, err := rl.pairing.Activate(body.Code, body.UserID)
 	if err != nil {
+		log.Printf("[pairing] activate failed for code=%s: %v", body.Code, err)
 		w.WriteHeader(400)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		json.NewEncoder(w).Encode(map[string]string{"error": "invalid or expired pairing code"})
 		return
 	}
 

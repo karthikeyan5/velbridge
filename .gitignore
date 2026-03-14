@@ -14,5 +14,8 @@ __pycache__/
 # Node
 node_modules/
 
+# Data (BoltDB, runtime state)
+data/
+
 # Logs
 *.log

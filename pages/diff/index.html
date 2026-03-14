@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VelBridge — Visual Diff</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #111; color: #fff; overflow-x: hidden; }
+
+    /* ── Landing Page Styles ── */
+    .landing { min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+    .landing-inner { max-width: 720px; width: 100%; padding: 0 24px; }
+
+    .hero { text-align: center; padding: 80px 0 48px; }
+    .hero-icon { font-size: 48px; margin-bottom: 16px; }
+    .hero h1 { font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 16px; background: linear-gradient(135deg, #fff 40%, #c9a84c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero p { font-size: 17px; color: #999; line-height: 1.6; max-width: 540px; margin: 0 auto; }
+
+    .features { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 48px; }
+    .feature-card { background: #1a1a2e; border: 1px solid #333; border-radius: 12px; padding: 24px; transition: border-color 0.2s; }
+    .feature-card:hover { border-color: #555; }
+    .feature-icon { font-size: 24px; margin-bottom: 10px; }
+    .feature-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; color: #e0e0e0; }
+    .feature-card p { font-size: 13px; color: #888; line-height: 1.5; }
+
+    .launch-form { background: #1a1a2e; border: 1px solid #333; border-radius: 16px; padding: 32px; margin-bottom: 64px; }
+    .launch-form h2 { font-size: 18px; font-weight: 700; margin-bottom: 20px; color: #e0e0e0; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .form-group input {
+      width: 100%; padding: 12px 16px; border: 1px solid #333; border-radius: 8px;
+      background: #111; color: #ddd; font-size: 14px; outline: none; transition: border-color 0.2s;
+    }
+    .form-group input:focus { border-color: #c9a84c; }
+    .form-group input::placeholder { color: #555; }
+    .compare-btn {
+      width: 100%; padding: 14px; border: none; border-radius: 8px;
+      background: #c9a84c; color: #111; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: background 0.2s; margin-top: 8px;
+    }
+    .compare-btn:hover { background: #d4b45c; }
+    .compare-btn:disabled { background: #555; color: #888; cursor: not-allowed; }
+
+    .footer-note { text-align: center; padding-bottom: 32px; font-size: 12px; color: #444; }
+
+    @media (max-width: 600px) {
+      .hero { padding: 48px 0 32px; }
+      .hero h1 { font-size: 28px; }
+      .hero p { font-size: 15px; }
+      .features { grid-template-columns: 1fr; }
+      .launch-form { padding: 24px; }
+    }
+
+    /* ── Diff Tool Styles ── */
+    .diff-tool { display: none; }
+    body.diff-mode { overflow: hidden; }
+    body.diff-mode .landing { display: none; }
+    body.diff-mode .diff-tool { display: block; }
+
+    .controls {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
+      background: #1a1a2e; padding: 8px 16px;
+      display: flex; align-items: center; gap: 16px;
+      border-bottom: 1px solid #333; font-size: 13px;
+    }
+    .controls label { color: #aaa; white-space: nowrap; }
+    .mode-btn {
+      padding: 4px 12px; border: 1px solid #555; border-radius: 4px;
+      background: transparent; color: #ccc; cursor: pointer; font-size: 12px;
+    }
+    .mode-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .url-label { color: #888; font-size: 11px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .back-link { color: #c9a84c; text-decoration: none; font-size: 12px; white-space: nowrap; }
+    .back-link:hover { text-decoration: underline; }
+
+    .diff-container { position: fixed; top: 44px; left: 0; right: 0; bottom: 0; }
+    .diff-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+    #iframe-b { pointer-events: none; }
+
+    .swipe-handle {
+      display: none; position: absolute; top: 44px; bottom: 0; width: 4px;
+      background: #ff4444; cursor: col-resize; z-index: 9999;
+    }
+    .swipe-handle::after {
+      content: '⟨⟩'; position: absolute; top: 50%; left: -14px;
+      transform: translateY(-50%); background: #ff4444; color: white;
+      padding: 8px 4px; border-radius: 4px; font-size: 12px;
+    }
+
+    .side-by-side #iframe-a { width: 50%; }
+    .side-by-side #iframe-b { left: 50%; width: 50%; opacity: 1 !important; pointer-events: auto; }
+    .divider { display: none; position: absolute; top: 44px; bottom: 0; left: 50%; width: 2px; background: #ff4444; z-index: 9999; }
+  </style>
+</head>
+<body>
+
+  <!-- ══════ LANDING PAGE ══════ -->
+  <div class="landing">
+    <div class="landing-inner">
+      <div class="hero">
+        <div class="hero-icon">⚡</div>
+        <h1>Visual Diff</h1>
+        <p>Compare any two web pages side by side. Spot visual differences instantly with overlay, swipe, and side-by-side modes.</p>
+      </div>
+
+      <div class="features">
+        <div class="feature-card">
+          <div class="feature-icon">🎨</div>
+          <h3>Design QA</h3>
+          <p>Compare staging vs production to catch visual regressions before they ship.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔬</div>
+          <h3>A/B Testing</h3>
+          <p>See visual differences between variants at a glance.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <h3>Regression Testing</h3>
+          <p>Catch unintended visual changes across deploys.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <h3>Cross-browser</h3>
+          <p>Compare renders across different browsers and setups.</p>
+        </div>
+      </div>
+
+      <div class="launch-form">
+        <h2>Start a comparison</h2>
+        <div class="form-group">
+          <label>URL A</label>
+          <input type="url" id="url-a" placeholder="https://staging.example.com" />
+        </div>
+        <div class="form-group">
+          <label>URL B</label>
+          <input type="url" id="url-b" placeholder="https://example.com" />
+        </div>
+        <button class="compare-btn" id="compare-btn" disabled>Compare</button>
+      </div>
+
+      <div class="footer-note">VelBridge — Visual Diff Tool</div>
+    </div>
+  </div>
+
+  <!-- ══════ DIFF TOOL ══════ -->
+  <div class="diff-tool">
+    <div class="controls">
+      <a class="back-link" href="?" id="back-link">← New</a>
+      <span style="font-weight:600;color:#fff">⚡ Diff</span>
+      <button class="mode-btn active" data-mode="overlay">Overlay</button>
+      <button class="mode-btn" data-mode="swipe">Swipe</button>
+      <button class="mode-btn" data-mode="side-by-side">Side by Side</button>
+      <label id="opacity-label">Opacity: <span id="opacity-value">50</span>%</label>
+      <input type="range" id="opacity-slider" min="0" max="100" value="50" style="width:120px">
+      <label><input type="checkbox" id="sync-scroll" checked> Sync Scroll</label>
+      <button class="mode-btn" id="dom-diff-btn">🔍 DOM Diff</button>
+      <button class="mode-btn" id="screenshot-btn">📸 Screenshot</button>
+      <span class="url-label" style="color:#60a5fa" id="url-label-a"></span>
+      <span class="url-label" style="color:#fb923c" id="url-label-b"></span>
+    </div>
+
+    <div class="diff-container" id="diff-container">
+      <iframe id="iframe-a"></iframe>
+      <iframe id="iframe-b" style="opacity:0.5"></iframe>
+      <div class="divider"></div>
+    </div>
+    <div class="swipe-handle" id="swipe-handle"></div>
+  </div>
+
+  <script>
+  (function() {
+    // ── Route: check query params ──
+    var params = new URLSearchParams(window.location.search);
+    var urlA = params.get('a');
+    var urlB = params.get('b');
+
+    if (urlA && urlB) {
+      // Mode B: Diff tool
+      document.body.classList.add('diff-mode');
+      initDiffTool(urlA, urlB);
+    } else {
+      // Mode A: Landing page
+      initLanding();
+    }
+
+    function initLanding() {
+      var inputA = document.getElementById('url-a');
+      var inputB = document.getElementById('url-b');
+      var btn = document.getElementById('compare-btn');
+
+      function checkInputs() {
+        btn.disabled = !(inputA.value.trim() && inputB.value.trim());
+      }
+      inputA.addEventListener('input', checkInputs);
+      inputB.addEventListener('input', checkInputs);
+
+      btn.addEventListener('click', function() {
+        var a = inputA.value.trim();
+        var b = inputB.value.trim();
+        if (a && b) {
+          window.location.search = '?a=' + encodeURIComponent(a) + '&b=' + encodeURIComponent(b);
+        }
+      });
+
+      // Allow Enter key to submit
+      [inputA, inputB].forEach(function(el) {
+        el.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' && !btn.disabled) btn.click();
+        });
+      });
+    }
+
+    // Convert a URL to a proxied URL to bypass CSP frame-ancestors restrictions
+    function toProxyURL(url) {
+      try {
+        var u = new URL(url, window.location.origin);
+        // Already a proxy URL — leave it
+        if (u.pathname.startsWith('/bridge/proxy/')) return url;
+        // Absolute http(s) URL — route through proxy
+        if (u.protocol === 'http:' || u.protocol === 'https:') {
+          return '/bridge/proxy/' + u.host + u.pathname + u.search + u.hash;
+        }
+      } catch(e) {}
+      return url;
+    }
+
+    function initDiffTool(urlA, urlB) {
+      var iframeA = document.getElementById('iframe-a');
+      var iframeB = document.getElementById('iframe-b');
+
+      // Route through proxy to bypass CSP frame-ancestors restrictions
+      iframeA.src = toProxyURL(urlA);
+      iframeB.src = toProxyURL(urlB);
+
+      // Set labels
+      document.getElementById('url-label-a').textContent = 'A: ' + urlA;
+      document.getElementById('url-label-a').title = urlA;
+      document.getElementById('url-label-b').textContent = 'B: ' + urlB;
+      document.getElementById('url-label-b').title = urlB;
+
+      // Back link
+      document.getElementById('back-link').href = window.location.pathname;
+
+      var opacitySlider = document.getElementById('opacity-slider');
+      var opacityValue = document.getElementById('opacity-value');
+      var opacityLabel = document.getElementById('opacity-label');
+      var swipeHandle = document.getElementById('swipe-handle');
+      var container = document.getElementById('diff-container');
+      var divider = container.querySelector('.divider');
+      var currentMode = 'overlay';
+      var isDragging = false;
+      var syncScroll = true;
+
+      // Mode switching
+      document.querySelectorAll('.mode-btn[data-mode]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          setMode(btn.dataset.mode);
+          document.querySelectorAll('.mode-btn[data-mode]').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+        });
+      });
+
+      function setMode(mode) {
+        currentMode = mode;
+        container.classList.remove('side-by-side');
+        swipeHandle.style.display = 'none';
+        divider.style.display = 'none';
+        iframeB.style.clipPath = '';
+        iframeB.style.pointerEvents = 'none';
+
+        if (mode === 'overlay') {
+          opacityLabel.style.display = ''; opacitySlider.style.display = '';
+          iframeB.style.opacity = opacitySlider.value / 100;
+        } else if (mode === 'swipe') {
+          opacityLabel.style.display = 'none'; opacitySlider.style.display = 'none';
+          iframeB.style.opacity = '1';
+          swipeHandle.style.display = 'block'; swipeHandle.style.left = '50%';
+          updateSwipe(window.innerWidth / 2);
+        } else if (mode === 'side-by-side') {
+          opacityLabel.style.display = 'none'; opacitySlider.style.display = 'none';
+          iframeB.style.opacity = '1';
+          container.classList.add('side-by-side');
+          divider.style.display = 'block';
+        }
+      }
+
+      opacitySlider.addEventListener('input', function() {
+        opacityValue.textContent = this.value;
+        iframeB.style.opacity = this.value / 100;
+      });
+
+      // Swipe
+      swipeHandle.addEventListener('mousedown', function() { isDragging = true; });
+      swipeHandle.addEventListener('touchstart', function() { isDragging = true; });
+      document.addEventListener('mouseup', function() { isDragging = false; });
+      document.addEventListener('touchend', function() { isDragging = false; });
+      document.addEventListener('mousemove', function(e) { if (isDragging && currentMode === 'swipe') updateSwipe(e.clientX); });
+      document.addEventListener('touchmove', function(e) { if (isDragging && currentMode === 'swipe') updateSwipe(e.touches[0].clientX); });
+
+      function updateSwipe(x) {
+        var pct = (x / window.innerWidth) * 100;
+        swipeHandle.style.left = pct + '%';
+        iframeB.style.clipPath = 'inset(0 0 0 ' + pct + '%)';
+      }
+
+      // Sync scroll
+      document.getElementById('sync-scroll').addEventListener('change', function() { syncScroll = this.checked; });
+
+      function setupScrollSync(srcFrame, destFrame) {
+        srcFrame.addEventListener('load', function() {
+          try {
+            srcFrame.contentWindow.addEventListener('scroll', function() {
+              if (syncScroll && destFrame.contentWindow) {
+                destFrame.contentWindow.scrollTo(srcFrame.contentWindow.scrollX, srcFrame.contentWindow.scrollY);
+              }
+            });
+          } catch(e) {}
+        });
+      }
+      setupScrollSync(iframeA, iframeB);
+      setupScrollSync(iframeB, iframeA);
+
+      // DOM Diff
+      document.getElementById('dom-diff-btn').addEventListener('click', function() {
+        var btn = this;
+        try {
+          var docA = iframeA.contentDocument;
+          var docB = iframeB.contentDocument;
+          if (!docA || !docB) { btn.textContent = '❌ Cannot access DOMs'; return; }
+
+          ['vel-diff-changed','vel-diff-added','vel-diff-removed'].forEach(function(cls) {
+            docA.querySelectorAll('.' + cls).forEach(function(el) { el.classList.remove(cls); });
+            docB.querySelectorAll('.' + cls).forEach(function(el) { el.classList.remove(cls); });
+          });
+
+          [docA, docB].forEach(function(doc) {
+            if (!doc.getElementById('__vel_diff_style')) {
+              var style = doc.createElement('style');
+              style.id = '__vel_diff_style';
+              style.textContent = '.vel-diff-added{outline:3px solid #22c55e!important;outline-offset:-2px}' +
+                '.vel-diff-removed{outline:3px solid #ef4444!important;outline-offset:-2px}' +
+                '.vel-diff-changed{outline:3px solid #f59e0b!important;outline-offset:-2px}';
+              doc.head.appendChild(style);
+            }
+          });
+
+          var diffCount = 0;
+          function compare(nodeA, nodeB) {
+            if (!nodeA || !nodeB) return;
+            var childrenA = Array.from(nodeA.children || []);
+            var childrenB = Array.from(nodeB.children || []);
+            var max = Math.max(childrenA.length, childrenB.length);
+            for (var i = 0; i < max; i++) {
+              var a = childrenA[i], b = childrenB[i];
+              if (a && !b) { a.classList.add('vel-diff-removed'); diffCount++; continue; }
+              if (!a && b) { b.classList.add('vel-diff-added'); diffCount++; continue; }
+              if (a.tagName !== b.tagName) { a.classList.add('vel-diff-changed'); b.classList.add('vel-diff-changed'); diffCount++; continue; }
+              if (a.children.length === 0 && b.children.length === 0) {
+                if (a.textContent.trim() !== b.textContent.trim()) {
+                  a.classList.add('vel-diff-changed'); b.classList.add('vel-diff-changed'); diffCount++;
+                }
+                continue;
+              }
+              compare(a, b);
+            }
+          }
+          compare(docA.body, docB.body);
+          btn.textContent = diffCount > 0 ? '🔍 ' + diffCount + ' diffs' : '✅ No diffs';
+          setTimeout(function() { btn.textContent = '🔍 DOM Diff'; }, 5000);
+        } catch(e) {
+          btn.textContent = '❌ ' + e.message;
+          setTimeout(function() { btn.textContent = '🔍 DOM Diff'; }, 3000);
+        }
+      });
+
+      // Screenshot
+      document.getElementById('screenshot-btn').addEventListener('click', function() {
+        try {
+          var docA = iframeA.contentDocument.documentElement;
+          var docB = iframeB.contentDocument.documentElement;
+          html2canvas(docA, { useCORS: true, scale: window.devicePixelRatio || 1 }).then(function(cA) {
+            html2canvas(docB, { useCORS: true, scale: window.devicePixelRatio || 1 }).then(function(cB) {
+              window.open(cA.toDataURL('image/png'), '_blank');
+              window.open(cB.toDataURL('image/png'), '_blank');
+            });
+          });
+        } catch(e) { alert('Screenshot failed: ' + e.message); }
+      });
+
+      // WebSocket for agent control
+      var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      var diffWS = new WebSocket(proto + '//' + location.host + '/bridge/proxy/_ws?session=diff');
+      diffWS.onmessage = function(event) {
+        var cmd = JSON.parse(event.data);
+        switch (cmd.type) {
+          case 'set_mode': document.querySelector('.mode-btn[data-mode="' + cmd.mode + '"]').click(); break;
+          case 'set_opacity': opacitySlider.value = cmd.value; opacitySlider.dispatchEvent(new Event('input')); break;
+          case 'screenshot': document.getElementById('screenshot-btn').click(); break;
+          case 'dom_diff': document.getElementById('dom-diff-btn').click(); break;
+          case 'scroll':
+            try { iframeA.contentWindow.scrollTo(cmd.x || 0, cmd.y || 0); } catch(e) {}
+            break;
+        }
+      };
+    }
+  })();
+  </script>
+  <script src="/bridge/proxy/_core/bridge/html2canvas.min.js"></script>
+</body>
+</html>

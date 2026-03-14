@@ -27,6 +27,38 @@
   .card { background: #16161c; border: 1px solid #2a2a35; border-radius: 12px; padding: 20px; margin-bottom: 20px; text-align: left; }
   code { background: #1a1a24; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #0af; }
   .footer { margin-top: 24px; color: #444; font-size: 12px; }
+
+  /* Pairing section */
+  .divider { display: flex; align-items: center; gap: 12px; margin: 28px 0 20px; }
+  .divider-line { flex: 1; height: 1px; background: #2a2a35; }
+  .divider-text { font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+
+  .pair-card { background: #16161c; border: 1px solid #2a2a35; border-radius: 12px; padding: 24px; margin-bottom: 20px; text-align: center; }
+  .pair-card h2 { font-size: 16px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
+  .pair-card .pair-sub { font-size: 13px; color: #666; margin-bottom: 16px; }
+  .pair-code { font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #f59e0b; font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; margin: 16px 0 8px; user-select: all; }
+  .pair-expire { font-size: 12px; color: #555; margin-bottom: 16px; }
+  .pair-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+
+  .btn-generate { padding: 12px 28px; border: 1px solid #0af; border-radius: 8px; background: rgba(0,170,255,0.1); color: #0af; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+  .btn-generate:hover { background: rgba(0,170,255,0.2); }
+
+  .btn-gold { padding: 10px 20px; border: 1px solid #c9a84c; border-radius: 8px; background: rgba(201,168,76,0.12); color: #c9a84c; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; position: relative; }
+  .btn-gold:hover { background: rgba(201,168,76,0.22); }
+  .btn-gold.copied { background: rgba(34,197,94,0.15); border-color: #22c55e; color: #22c55e; }
+
+  .btn-tg { display: inline-block; padding: 10px 20px; border: 1px solid rgba(0,170,255,0.3); border-radius: 8px; background: rgba(0,170,255,0.08); color: #0af; cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
+  .btn-tg:hover { background: rgba(0,170,255,0.18); }
+
+  .pair-status { font-size: 13px; color: #888; margin-top: 16px; }
+  .pair-status.activated { color: #22c55e; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.3s ease-out; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .pulse { animation: pulse 1.5s infinite; }
+  @keyframes copiedPop { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+  .pop { animation: copiedPop 0.3s ease-out; }
 </style>
 </head>
 <body>
@@ -43,15 +75,15 @@
       </div>
       <div class="step">
         <div class="step-num">2</div>
-        <div class="step-text"><strong>Run it</strong> — you'll see a 6-digit pairing code</div>
+        <div class="step-text"><strong>Run it</strong> — Chrome launches with a bridge tab</div>
       </div>
       <div class="step">
         <div class="step-num">3</div>
-        <div class="step-text"><strong>Send the code</strong> to your AI on Telegram</div>
+        <div class="step-text"><strong>Pair</strong> — the bridge tab shows a 6-digit code; send it to your AI</div>
       </div>
       <div class="step" style="margin-bottom:0">
         <div class="step-num">4</div>
-        <div class="step-text"><strong>Done!</strong> Browser launches and connects automatically</div>
+        <div class="step-text"><strong>Done!</strong> Your AI can now control this browser</div>
       </div>
     </div>
   </div>
@@ -62,44 +94,247 @@
     <div class="other-platforms" id="otherPlatforms"></div>
   </div>
 
+  <div class="divider">
+    <div class="divider-line"></div>
+    <span class="divider-text">or pair manually</span>
+    <div class="divider-line"></div>
+  </div>
+
+  <div class="pair-card" id="sessionCard" style="display:none;">
+    <h2>✅ Logged In</h2>
+    <div class="pair-sub" id="sessionStatus"></div>
+    <div class="pair-sub" style="color:#888; margin-top:8px;">The launcher will connect automatically — no pairing code needed.</div>
+  </div>
+
+  <div class="pair-card" id="pairCard">
+    <h2>🔗 Quick Pair</h2>
+    <div class="pair-sub">Generate a pairing code and send it to your AI agent</div>
+    <div id="pairContent">
+      <button class="btn-generate" onclick="generateCode()">Generate Pairing Code</button>
+    </div>
+  </div>
+
   <div class="footer">Powered by OpenClaw · Keep the launcher terminal open while using</div>
 </div>
 
 <script>
 (function() {
-  const platforms = { linux: 'Linux', mac: 'Mac', windows: 'Windows' };
-  const ua = navigator.userAgent || '';
-  const pl = navigator.platform || '';
-  let detected = 'linux';
+  var ORIGIN = window.location.origin;
+
+  // ── Download buttons ──
+  var platforms = { linux: 'Linux', mac: 'Mac', windows: 'Windows' };
+  var ua = navigator.userAgent || '';
+  var pl = navigator.platform || '';
+  var detected = 'linux';
   if (/Win/i.test(pl)) detected = 'windows';
   else if (/Mac/i.test(pl)) detected = 'mac';
 
-  const dlRow = document.getElementById('downloads');
-  const otherRow = document.getElementById('otherPlatforms');
-  const toggle = document.getElementById('otherToggle');
+  var dlRow = document.getElementById('downloads');
+  var otherRow = document.getElementById('otherPlatforms');
+  var toggle = document.getElementById('otherToggle');
 
-  // Primary download button
-  const btn = document.createElement('a');
-  btn.href = '/relay/download?platform=' + detected;
+  var btn = document.createElement('a');
+  btn.href = '/bridge/debug/download?platform=' + detected;
   btn.className = 'btn';
   btn.textContent = '⬇ Download for ' + platforms[detected];
   dlRow.appendChild(btn);
 
-  // Other platforms
-  const others = Object.keys(platforms).filter(p => p !== detected);
+  var others = Object.keys(platforms).filter(function(p) { return p !== detected; });
   toggle.textContent = '▸ Other platforms';
-  others.forEach(p => {
-    const a = document.createElement('a');
-    a.href = '/relay/download?platform=' + p;
+  others.forEach(function(p) {
+    var a = document.createElement('a');
+    a.href = '/bridge/debug/download?platform=' + p;
     a.textContent = '⬇ ' + platforms[p];
     otherRow.appendChild(a);
   });
 
   window.toggleOther = function() {
-    const el = document.getElementById('otherPlatforms');
+    var el = document.getElementById('otherPlatforms');
     el.classList.toggle('show');
     toggle.textContent = el.classList.contains('show') ? '▾ Other platforms' : '▸ Other platforms';
   };
+
+  // ── Session check: if logged in, skip pairing but STILL show download/instructions ──
+  (function checkSession() {
+    fetch(ORIGIN + '/bridge/debug/connect/session', { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok) {
+          // Authenticated — skip pairing section, but keep instructions & download visible
+          document.getElementById('sessionCard').style.display = 'block';
+          document.getElementById('pairCard').style.display = 'none';
+          // Hide the "or pair manually" divider since we're hiding the pair card
+          var divider = document.querySelector('.divider');
+          if (divider) divider.style.display = 'none';
+          document.getElementById('sessionStatus').textContent = 'Signed in as ' + d.userId;
+
+          // Update step 2 & 3 to reflect that pairing is skipped
+          var steps = document.querySelectorAll('.step-text');
+          if (steps.length >= 3) {
+            steps[1].innerHTML = '<strong>Run it</strong> — browser launches and connects automatically';
+            steps[2].innerHTML = '<strong>That\'s it!</strong> No pairing code needed when logged in';
+            steps[2].parentElement.querySelector('.step-num').textContent = '✓';
+            steps[2].parentElement.querySelector('.step-num').style.background = 'rgba(34,197,94,0.15)';
+            steps[2].parentElement.querySelector('.step-num').style.color = '#22c55e';
+          }
+          // Hide step 4 (redundant when auth-skipped)
+          var allSteps = document.querySelectorAll('.step');
+          if (allSteps.length >= 4) allSteps[3].style.display = 'none';
+        } else {
+          // Not authenticated — show login button in pairing card
+          var loginBtn = document.createElement('div');
+          loginBtn.style.marginTop = '12px';
+          loginBtn.innerHTML = '<a class="btn-tg" href="/login?redirect=' + encodeURIComponent('/bridge/debug/connect') + '">🔑 Log in to skip pairing</a>';
+          document.getElementById('pairContent').appendChild(loginBtn);
+        }
+      })
+      .catch(function() {
+        // Server error — just show normal pairing flow
+      });
+  })();
+
+  // ── Pairing ──
+  var currentCode = '';
+  var currentToken = '';
+  var pollTimer = null;
+
+  function buildAgentMessage(code) {
+    return '🔗 VelBridge Pairing Request\n\n' +
+      'Code: ' + code + '\n' +
+      'Server: ' + ORIGIN + '\n\n' +
+      'To activate, call:\n' +
+      'POST ' + ORIGIN + '/bridge/debug/pair/activate\n' +
+      'Authorization: Bearer <your-bot-token>\n' +
+      'Content-Type: application/json\n' +
+      'Body: {"code": "' + code + '", "userId": <your-telegram-user-id>}\n\n' +
+      'This connects my browser to VelBridge for debugging/proxy/observe features.';
+  }
+
+  window.generateCode = function() {
+    var content = document.getElementById('pairContent');
+    content.innerHTML = '<div class="pair-sub pulse">Generating...</div>';
+
+    fetch(ORIGIN + '/bridge/debug/pair/new')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) {
+          content.innerHTML = '<div class="pair-sub" style="color:#ef4444;">❌ ' + d.error + '</div>' +
+            '<button class="btn-generate" onclick="generateCode()" style="margin-top:12px;">Try Again</button>';
+          return;
+        }
+        currentCode = d.code;
+        currentToken = d.token;
+        showPairingCode(d.code, d.expiresAt);
+        startPolling(d.token);
+      })
+      .catch(function() {
+        content.innerHTML = '<div class="pair-sub" style="color:#ef4444;">❌ Could not reach server</div>' +
+          '<button class="btn-generate" onclick="generateCode()" style="margin-top:12px;">Retry</button>';
+      });
+  };
+
+  function showPairingCode(code, expiresAt) {
+    var content = document.getElementById('pairContent');
+    var agentMsg = buildAgentMessage(code);
+    var tgText = encodeURIComponent(agentMsg);
+    var tgUrl = 'https://t.me/share/url?url=' + encodeURIComponent(' ') + '&text=' + tgText;
+
+    content.className = 'fade-in';
+    content.innerHTML =
+      '<div class="pair-code">' + code + '</div>' +
+      '<div class="pair-expire" id="expireText"></div>' +
+      '<div class="pair-actions">' +
+        '<button class="btn-gold" id="copyAgentBtn" onclick="copyForAgent()">📋 Copy for Agent</button>' +
+        '<a class="btn-tg" href="' + tgUrl + '" target="_blank">💬 Send to Telegram</a>' +
+      '</div>' +
+      '<div class="pair-status" id="pairStatus"><span class="pulse">⏳</span> Waiting for activation...</div>' +
+      '<button class="btn-generate" onclick="generateCode()" style="margin-top:16px; font-size:12px; padding:8px 16px; opacity:0.6;">🔄 New Code</button>';
+
+    // Countdown timer
+    if (expiresAt) {
+      var expiry = new Date(expiresAt).getTime();
+      updateCountdown(expiry);
+      var cdInterval = setInterval(function() {
+        if (!updateCountdown(expiry)) clearInterval(cdInterval);
+      }, 1000);
+    }
+  }
+
+  function updateCountdown(expiryMs) {
+    var el = document.getElementById('expireText');
+    if (!el) return false;
+    var remaining = Math.max(0, Math.floor((expiryMs - Date.now()) / 1000));
+    if (remaining <= 0) {
+      el.textContent = 'Code expired';
+      el.style.color = '#ef4444';
+      return false;
+    }
+    var m = Math.floor(remaining / 60);
+    var s = remaining % 60;
+    el.textContent = 'Expires in ' + m + ':' + (s < 10 ? '0' : '') + s;
+    return true;
+  }
+
+  window.copyForAgent = function() {
+    var msg = buildAgentMessage(currentCode);
+    navigator.clipboard.writeText(msg).then(function() {
+      var btn = document.getElementById('copyAgentBtn');
+      btn.classList.add('copied', 'pop');
+      btn.textContent = '✅ Copied!';
+      setTimeout(function() {
+        btn.classList.remove('copied', 'pop');
+        btn.textContent = '📋 Copy for Agent';
+      }, 2000);
+    }).catch(function() {
+      // Fallback: select a textarea
+      var ta = document.createElement('textarea');
+      ta.value = msg;
+      ta.style.cssText = 'position:fixed;top:-9999px;';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      var btn = document.getElementById('copyAgentBtn');
+      btn.classList.add('copied', 'pop');
+      btn.textContent = '✅ Copied!';
+      setTimeout(function() {
+        btn.classList.remove('copied', 'pop');
+        btn.textContent = '📋 Copy for Agent';
+      }, 2000);
+    });
+  };
+
+  function startPolling(token) {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollPairing(token, 0);
+  }
+
+  function pollPairing(token, attempt) {
+    if (attempt >= 150) {
+      var status = document.getElementById('pairStatus');
+      if (status) {
+        status.innerHTML = '⏰ Pairing expired';
+        status.style.color = '#ef4444';
+      }
+      return;
+    }
+    pollTimer = setTimeout(function() {
+      fetch(ORIGIN + '/bridge/debug/pair/status?token=' + token)
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.activated) {
+            var status = document.getElementById('pairStatus');
+            if (status) {
+              status.className = 'pair-status activated fade-in';
+              status.innerHTML = '✅ Paired successfully! Your browser is now connected.';
+            }
+          } else {
+            pollPairing(token, attempt + 1);
+          }
+        })
+        .catch(function() { pollPairing(token, attempt + 1); });
+    }, 2000);
+  }
 })();
 </script>
 </body>
