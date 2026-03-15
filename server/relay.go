@@ -26,7 +26,8 @@ type Relay struct {
 
 	// Proxy mode (v2)
 	proxySessions  *proxyManager
-	proxyWSClients *proxyWSManager
+	proxyWSClients    *proxyWSManager
+	proxyAgentClients *proxyWSManager
 
 	// Observe mode (v2)
 	observeSessions  *observeManager
@@ -69,7 +70,8 @@ func NewFull(appDir string) *Relay {
 		pairing:          NewPairingManager(sm),
 		launchers:        newLauncherStore(),
 		proxySessions:    newProxyManager(),
-		proxyWSClients:   newProxyWSManager(),
+		proxyWSClients:    newProxyWSManager(),
+		proxyAgentClients: newProxyWSManager(),
 		observeSessions:  newObserveManager(dataDir),
 		observeWSClients: newObserveWSManager(),
 		appDir:           appDir,

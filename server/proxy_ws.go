@@ -103,22 +103,31 @@ func (rl *Relay) HandleProxyWS(w http.ResponseWriter, r *http.Request) {
 		}
 
 		msgType, _ := env["type"].(string)
+		// Forward browser messages to connected agent
+		forwardToAgent := func(data []byte) {
+			if agent := rl.proxyAgentClients.Get(sessionID); agent != nil {
+				if err := agent.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+					log.Printf("[proxy-ws] failed to forward to agent: %v", err)
+				}
+			}
+		}
+
 		switch msgType {
 		case "console", "error", "net":
-			// Store in session log (future: forward to agent via WS)
-			log.Printf("[proxy-ws] [%s] %s: %s", sessionID, msgType, string(msg))
+			log.Printf("[proxy-ws] [%s] %s", sessionID, msgType)
+			forwardToAgent(msg)
 
 		case "screenshot":
-			// Screenshot received from browser
 			log.Printf("[proxy-ws] [%s] screenshot received (%d bytes data)", sessionID, len(msg))
+			forwardToAgent(msg)
 
 		case "info":
-			// Page info response
-			log.Printf("[proxy-ws] [%s] info: %s", sessionID, string(msg))
+			log.Printf("[proxy-ws] [%s] info received", sessionID)
+			forwardToAgent(msg)
 
 		case "recording":
-			// Recording data
 			log.Printf("[proxy-ws] [%s] recording received", sessionID)
+			forwardToAgent(msg)
 
 		case "import_cookies":
 			// Cookie import from OAuth overlay
@@ -237,7 +246,17 @@ func (rl *Relay) HandleProxyAgentWS(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[proxy-agent-ws] upgrade failed: %v", err)
 		return
 	}
-	defer conn.Close()
+	agentClient := &proxyWSClient{
+		conn:      conn,
+		sessionID: sessionID,
+	}
+	rl.proxyAgentClients.Add(sessionID, agentClient)
+
+	defer func() {
+		conn.Close()
+		rl.proxyAgentClients.Remove(sessionID)
+		log.Printf("[proxy-agent-ws] agent disconnected, session=%s", sessionID)
+	}()
 
 	log.Printf("[proxy-agent-ws] agent connected, session=%s", sessionID)
 
@@ -261,7 +280,6 @@ func (rl *Relay) HandleProxyAgentWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	log.Printf("[proxy-agent-ws] agent disconnected, session=%s", sessionID)
 }
 
 // Ensure io is used (for the relay functions above)
