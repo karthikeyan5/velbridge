@@ -62,16 +62,54 @@
       // getDisplayMedia denied or unavailable — fall through to html2canvas
     }
 
-    // Fallback: html2canvas
+    // Viewport capture (default for non-fullPage) — fast and reliable
+    if (!fullPage) {
+      try {
+        var vCanvas = document.createElement('canvas');
+        var dpr = window.devicePixelRatio || 1;
+        vCanvas.width = window.innerWidth * dpr;
+        vCanvas.height = window.innerHeight * dpr;
+        var vCtx = vCanvas.getContext('2d');
+        vCtx.scale(dpr, dpr);
+
+        // Use html2canvas but constrained to viewport dimensions only (much faster)
+        if (typeof html2canvas === 'function') {
+          var vpCanvas = await Promise.race([
+            html2canvas(document.body, {
+              useCORS: true,
+              scale: dpr,
+              width: window.innerWidth,
+              height: window.innerHeight,
+              x: window.scrollX,
+              y: window.scrollY,
+              windowWidth: window.innerWidth,
+              windowHeight: window.innerHeight
+            }),
+            new Promise(function(_, reject) {
+              setTimeout(function() { reject(new Error('viewport timeout')); }, 5000);
+            })
+          ]);
+          return { data: vpCanvas.toDataURL('image/png'), method: 'viewport' };
+        }
+      } catch(e) {
+        // Viewport capture failed, continue to full html2canvas
+      }
+    }
+
+    // Full-page html2canvas (opt-in via fullPage: true, or fallback)
     if (typeof html2canvas === 'function') {
       try {
-        var target = fullPage ? document.documentElement : document.body;
-        var canvas = await html2canvas(target, {
-          useCORS: true,
-          scale: window.devicePixelRatio || 1,
-          width: document.documentElement.clientWidth,
-          height: fullPage ? document.documentElement.scrollHeight : window.innerHeight
-        });
+        var canvas = await Promise.race([
+          html2canvas(document.documentElement, {
+            useCORS: true,
+            scale: window.devicePixelRatio || 1,
+            width: document.documentElement.clientWidth,
+            height: document.documentElement.scrollHeight
+          }),
+          new Promise(function(_, reject) {
+            setTimeout(function() { reject(new Error('html2canvas timeout')); }, 10000);
+          })
+        ]);
         return { data: canvas.toDataURL('image/png'), method: 'html2canvas' };
       } catch(e) {
         return { data: null, method: 'error', error: e.message };
