@@ -714,16 +714,20 @@ func mustOpen(path string) io.ReadCloser {
 func (rl *Relay) handleProxySessions(w http.ResponseWriter, r *http.Request) {
 	sessions := rl.proxySessions.List()
 	type sessionInfo struct {
-		ID        string `json:"id"`
-		Domain    string `json:"domain"`
-		CreatedAt string `json:"created_at"`
+		ID               string `json:"id"`
+		Domain           string `json:"domain"`
+		CreatedAt        string `json:"created_at"`
+		BrowserConnected bool   `json:"browser_connected"`
+		AgentConnected   bool   `json:"agent_connected"`
 	}
 	out := make([]sessionInfo, 0, len(sessions))
 	for _, s := range sessions {
 		out = append(out, sessionInfo{
-			ID:        s.ID,
-			Domain:    s.Domain,
-			CreatedAt: s.CreatedAt.Format(time.RFC3339),
+			ID:               s.ID,
+			Domain:           s.Domain,
+			CreatedAt:        s.CreatedAt.Format(time.RFC3339),
+			BrowserConnected: rl.proxyWSClients.Get(s.ID) != nil,
+			AgentConnected:   rl.proxyAgentClients.Get(s.ID) != nil,
 		})
 	}
 	w.Header().Set("Content-Type", "application/json")

@@ -214,6 +214,32 @@
     }
   };
 
+  // ── Keep-alive ping (detects silent WS death on mobile) ──
+  var pingInterval = null;
+  function startPing() {
+    if (pingInterval) clearInterval(pingInterval);
+    pingInterval = setInterval(function() {
+      if (ws && wsReady) {
+        try { ws.send(JSON.stringify({ type: 'ping', ts: Date.now() })); }
+        catch(e) { wsReady = false; connectWS(); }
+      }
+    }, 15000); // every 15s
+  }
+
+  // ── Reconnect on tab visibility change (mobile app switching) ──
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      // Tab became visible again — check if WS is still alive
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        connectWS();
+      } else {
+        // Send a ping to verify connection is actually alive
+        try { ws.send(JSON.stringify({ type: 'ping', ts: Date.now() })); }
+        catch(e) { connectWS(); }
+      }
+    }
+  });
+
   // ── Expose send function and connect ──
   window.__velSend = send;
   window.__velWS = function() { return ws; };
@@ -222,8 +248,9 @@
     sessionId = window.__velSession || sessionId;
     domain = window.__velDomain || domain;
     connectWS();
+    startPing();
   };
 
   // Auto-init if session is already set
-  if (sessionId) connectWS();
+  if (sessionId) { connectWS(); startPing(); }
 })();
