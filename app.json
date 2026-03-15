@@ -8,7 +8,12 @@
     "/bridge/debug/connect": {
       "type": "page",
       "dir": "pages/relay-connect"
-    }
+    },
+    "/bridge/debug/": { "public": true },
+    "/bridge/proxy/": { "public": true },
+    "/bridge/observe/": { "public": true },
+    "/bridge/diff/": { "public": true },
+    "/bridge/status": { "public": true }
   },
   "server": {
     "package": "server"
