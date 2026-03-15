@@ -276,111 +276,90 @@ func extractProxyTargetPath(urlPath string) string {
 	return path[idx:]
 }
 
-// Regex patterns for URL rewriting
+// Regex patterns for HTML sanitization (kept for security/compatibility)
 var (
-	htmlAbsURLRe      = regexp.MustCompile(`((?:src|href|action|poster|data)\s*=\s*["'])https?://([^/"'\s]+)(/[^"'\s]*)?(["'])`)
-	htmlProtoRelRe    = regexp.MustCompile(`((?:src|href|action|poster|data)\s*=\s*["'])//([^/"'\s]+)(/[^"'\s]*)?(["'])`)
-	htmlRootRelRe     = regexp.MustCompile(`((?:src|href|action|poster|data)\s*=\s*["'])(/[^/"'\s][^"'\s]*)(["'])`)
-	cssAbsURLRe       = regexp.MustCompile(`url\(\s*["']?https?://([^/"'\s\)]+)(/[^"'\s\)]*)?\s*["']?\s*\)`)
-	cssProtoRelRe     = regexp.MustCompile(`url\(\s*["']?//([^/"'\s\)]+)(/[^"'\s\)]*)?\s*["']?\s*\)`)
-	cssRootRelRe      = regexp.MustCompile(`url\(\s*["']?(/[^/"'\s\)][^"'\s\)]*)\s*["']?\s*\)`)
-	metaCSPRe        = regexp.MustCompile(`(?i)<meta[^>]+http-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>`)
-	integrityAttrRe  = regexp.MustCompile(`\s+integrity\s*=\s*["'][^"']*["']`)
-	baseTagRe        = regexp.MustCompile(`(?i)<base[^>]*>`)
+	metaCSPRe       = regexp.MustCompile(`(?i)<meta[^>]+http-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>`)
+	integrityAttrRe = regexp.MustCompile(`\s+integrity\s*=\s*["'][^"']*["']`)
+	baseTagRe       = regexp.MustCompile(`(?i)<base[^>]*>`)
+
+	// Head-only rewriting: match <link> and <script> tags with src= or href= attributes
+	// These fire before the Service Worker activates on first page load
+	headLinkAbsRe      = regexp.MustCompile(`(<(?:link|script)\b[^>]*(?:src|href)\s*=\s*["'])https?://([^/"'\s]+)(/[^"'\s]*)?(["'][^>]*>)`)
+	headLinkProtoRelRe = regexp.MustCompile(`(<(?:link|script)\b[^>]*(?:src|href)\s*=\s*["'])//([^/"'\s]+)(/[^"'\s]*)?(["'][^>]*>)`)
+	headLinkRootRelRe  = regexp.MustCompile(`(<(?:link|script)\b[^>]*(?:src|href)\s*=\s*["'])(/[^/"'\s][^"'\s]*)(["'][^>]*>)`)
+	headRe             = regexp.MustCompile(`(?is)(<head[^>]*>)(.*?)(</head>)`)
 )
 
-func rewriteHTMLURLs(body, domain string) string {
-	// Strip meta CSP
+// sanitizeHTML strips meta CSP, integrity attributes, and base tags from HTML.
+func sanitizeHTML(body string) string {
 	body = metaCSPRe.ReplaceAllString(body, "")
-	// Strip integrity attributes
 	body = integrityAttrRe.ReplaceAllString(body, "")
-	// Strip base tags
 	body = baseTagRe.ReplaceAllString(body, "")
-
-	// Rewrite absolute URLs → /bridge/proxy/{domain}/{path}
-	body = htmlAbsURLRe.ReplaceAllStringFunc(body, func(match string) string {
-		m := htmlAbsURLRe.FindStringSubmatch(match)
-		if len(m) < 5 {
-			return match
-		}
-		prefix, extDomain, path, quote := m[1], m[2], m[3], m[4]
-		if path == "" {
-			path = "/"
-		}
-		return prefix + "/bridge/proxy/" + extDomain + path + quote
-	})
-
-	// Rewrite protocol-relative URLs (//domain/path) → /bridge/proxy/{domain}/{path}
-	body = htmlProtoRelRe.ReplaceAllStringFunc(body, func(match string) string {
-		m := htmlProtoRelRe.FindStringSubmatch(match)
-		if len(m) < 5 {
-			return match
-		}
-		prefix, extDomain, path, quote := m[1], m[2], m[3], m[4]
-		if path == "" {
-			path = "/"
-		}
-		return prefix + "/bridge/proxy/" + extDomain + path + quote
-	})
-
-	// Rewrite root-relative URLs → /bridge/proxy/{domain}/{path}
-	body = htmlRootRelRe.ReplaceAllStringFunc(body, func(match string) string {
-		m := htmlRootRelRe.FindStringSubmatch(match)
-		if len(m) < 4 {
-			return match
-		}
-		prefix, path, quote := m[1], m[2], m[3]
-		// Don't rewrite already-proxied paths
-		if strings.HasPrefix(path, "/bridge/proxy/") {
-			return match
-		}
-		return prefix + "/bridge/proxy/" + domain + path + quote
-	})
-
 	return body
 }
 
-func rewriteCSSURLs(body, domain string) string {
-	// Rewrite absolute URLs in CSS
-	body = cssAbsURLRe.ReplaceAllStringFunc(body, func(match string) string {
-		m := cssAbsURLRe.FindStringSubmatch(match)
-		if len(m) < 3 {
-			return match
+// rewriteHeadURLs rewrites ONLY src= and href= in <link> and <script> tags
+// within <head>...</head>. This is a safety net for first page load before
+// the Service Worker activates.
+func rewriteHeadURLs(body, domain string) string {
+	return headRe.ReplaceAllStringFunc(body, func(headBlock string) string {
+		m := headRe.FindStringSubmatch(headBlock)
+		if len(m) < 4 {
+			return headBlock
 		}
-		extDomain, path := m[1], m[2]
-		if path == "" {
-			path = "/"
-		}
-		return "url('/bridge/proxy/" + extDomain + path + "')"
-	})
+		openTag, content, closeTag := m[1], m[2], m[3]
 
-	// Rewrite protocol-relative URLs in CSS
-	body = cssProtoRelRe.ReplaceAllStringFunc(body, func(match string) string {
-		m := cssProtoRelRe.FindStringSubmatch(match)
-		if len(m) < 3 {
-			return match
-		}
-		extDomain, path := m[1], m[2]
-		if path == "" {
-			path = "/"
-		}
-		return "url('/bridge/proxy/" + extDomain + path + "')"
-	})
+		// Rewrite absolute URLs in <link>/<script> tags
+		content = headLinkAbsRe.ReplaceAllStringFunc(content, func(match string) string {
+			sm := headLinkAbsRe.FindStringSubmatch(match)
+			if len(sm) < 5 {
+				return match
+			}
+			prefix, extDomain, path, suffix := sm[1], sm[2], sm[3], sm[4]
+			if path == "" {
+				path = "/"
+			}
+			return prefix + "/bridge/proxy/" + extDomain + path + suffix
+		})
 
-	// Rewrite root-relative URLs in CSS
-	body = cssRootRelRe.ReplaceAllStringFunc(body, func(match string) string {
-		m := cssRootRelRe.FindStringSubmatch(match)
-		if len(m) < 2 {
-			return match
-		}
-		path := m[1]
-		if strings.HasPrefix(path, "/bridge/proxy/") {
-			return match
-		}
-		return "url('/bridge/proxy/" + domain + path + "')"
-	})
+		// Rewrite protocol-relative URLs in <link>/<script> tags
+		content = headLinkProtoRelRe.ReplaceAllStringFunc(content, func(match string) string {
+			sm := headLinkProtoRelRe.FindStringSubmatch(match)
+			if len(sm) < 5 {
+				return match
+			}
+			prefix, extDomain, path, suffix := sm[1], sm[2], sm[3], sm[4]
+			if path == "" {
+				path = "/"
+			}
+			return prefix + "/bridge/proxy/" + extDomain + path + suffix
+		})
 
-	return body
+		// Rewrite root-relative URLs in <link>/<script> tags
+		content = headLinkRootRelRe.ReplaceAllStringFunc(content, func(match string) string {
+			sm := headLinkRootRelRe.FindStringSubmatch(match)
+			if len(sm) < 4 {
+				return match
+			}
+			prefix, path, suffix := sm[1], sm[2], sm[3]
+			if strings.HasPrefix(path, "/bridge/proxy/") {
+				return match
+			}
+			return prefix + "/bridge/proxy/" + domain + path + suffix
+		})
+
+		return openTag + content + closeTag
+	})
+}
+
+// swRegistrationScript returns the Service Worker registration <script> tag.
+func swRegistrationScript() string {
+	return `<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/bridge/proxy/_core/bridge/sw.js', {scope: '/bridge/proxy/'})
+    .then(reg => { if (reg.active) return; reg.addEventListener('updatefound', () => { reg.installing.addEventListener('statechange', e => { if (e.target.state === 'activated') location.reload(); }); }); });
+}
+</script>`
 }
 
 // rewriteLocationHeader rewrites a Location header URL to stay within the proxy.
@@ -453,16 +432,18 @@ func buildMonitorScript(sessionID, domain string) string {
 
 func injectMonitorJS(body, sessionID, domain string) string {
 	script := buildMonitorScript(sessionID, domain)
+	swScript := swRegistrationScript()
+	injection := swScript + script
 	// Inject before </head> or at end of body
 	idx := strings.Index(strings.ToLower(body), "</head>")
 	if idx >= 0 {
-		return body[:idx] + script + body[idx:]
+		return body[:idx] + injection + body[idx:]
 	}
 	idx = strings.Index(strings.ToLower(body), "</body>")
 	if idx >= 0 {
-		return body[:idx] + script + body[idx:]
+		return body[:idx] + injection + body[idx:]
 	}
-	return body + script
+	return body + injection
 }
 
 // HandleProxy is the main reverse proxy handler for /bridge/proxy/
@@ -606,25 +587,20 @@ func (rl *Relay) HandleProxy(w http.ResponseWriter, r *http.Request) {
 					return err
 				}
 				bodyStr := string(body)
-				bodyStr = rewriteHTMLURLs(bodyStr, domain)
+				// Sanitize: strip meta CSP, integrity attrs, base tags
+				bodyStr = sanitizeHTML(bodyStr)
+				// Minimal head-only rewrite: covers <link>/<script> in <head>
+				// before SW activates on first load
+				bodyStr = rewriteHeadURLs(bodyStr, domain)
+				// Inject SW registration + monitor scripts
 				bodyStr = injectMonitorJS(bodyStr, sess.ID, domain)
 
 				resp.Body = io.NopCloser(strings.NewReader(bodyStr))
 				resp.ContentLength = -1           // Use chunked transfer — avoids HTTP2 mismatch with downstream compression
 				resp.Header.Del("Content-Length")  // Let transport set it or use chunked
 				resp.Header.Del("Content-Encoding")
-			} else if isCSSResponse(resp) {
-				body, err := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				if err != nil {
-					return err
-				}
-				bodyStr := rewriteCSSURLs(string(body), domain)
-				resp.Body = io.NopCloser(strings.NewReader(bodyStr))
-				resp.ContentLength = -1
-				resp.Header.Del("Content-Length")
-				resp.Header.Del("Content-Encoding")
 			}
+			// CSS: no longer rewritten — Service Worker handles external CSS URLs
 			// Non-HTML/CSS: stream through unchanged
 			// Still remove Content-Length to prevent HTTP/2 protocol errors
 			// when downstream proxy compresses or re-frames the response
