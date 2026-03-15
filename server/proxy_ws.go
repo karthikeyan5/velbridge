@@ -83,10 +83,27 @@ func (rl *Relay) HandleProxyWS(w http.ResponseWriter, r *http.Request) {
 	rl.proxyWSClients.Add(sessionID, client)
 	log.Printf("[proxy-ws] browser connected, session=%s", sessionID)
 
+	// Notify connected agent that browser (re)connected
+	if agent := rl.proxyAgentClients.Get(sessionID); agent != nil {
+		reconnectMsg, _ := json.Marshal(map[string]interface{}{
+			"type":       "browser_connected",
+			"session_id": sessionID,
+		})
+		agent.conn.WriteMessage(websocket.TextMessage, reconnectMsg)
+	}
+
 	defer func() {
 		conn.Close()
 		rl.proxyWSClients.Remove(sessionID)
 		log.Printf("[proxy-ws] browser disconnected, session=%s", sessionID)
+		// Notify agent that browser disconnected
+		if agent := rl.proxyAgentClients.Get(sessionID); agent != nil {
+			disconnectMsg, _ := json.Marshal(map[string]interface{}{
+				"type":       "browser_disconnected",
+				"session_id": sessionID,
+			})
+			agent.conn.WriteMessage(websocket.TextMessage, disconnectMsg)
+		}
 	}()
 
 	// Read loop: receive data from the browser (console, errors, network, screenshots)
@@ -234,10 +251,20 @@ func (rl *Relay) HandleProxyWSRelay(w http.ResponseWriter, r *http.Request) {
 
 // HandleProxyAgentWS handles agent-side WebSocket for controlling proxy sessions.
 // Agents connect here to send commands (screenshot, navigate, etc.) to the proxied page.
+// Accepts either ?session=<id> or ?domain=<domain> (auto-resolves to latest session).
 func (rl *Relay) HandleProxyAgentWS(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.URL.Query().Get("session")
 	if sessionID == "" {
-		http.Error(w, "Missing session parameter", 400)
+		// Try domain-based lookup
+		domain := r.URL.Query().Get("domain")
+		if domain != "" {
+			if sess := rl.proxySessions.Get(domain); sess != nil {
+				sessionID = sess.ID
+			}
+		}
+	}
+	if sessionID == "" {
+		http.Error(w, "Missing session or domain parameter", 400)
 		return
 	}
 

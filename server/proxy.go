@@ -60,6 +60,28 @@ func (pm *proxyManager) GetOrCreate(domain string) *ProxySession {
 	return s
 }
 
+// GetOrCreateWithID is like GetOrCreate but allows specifying a custom session ID.
+func (pm *proxyManager) GetOrCreateWithID(domain, customID string) *ProxySession {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	if s, ok := pm.sessions[domain]; ok {
+		return s
+	}
+	id := customID
+	if id == "" {
+		id = generateToken()[:12]
+	}
+	s := &ProxySession{
+		ID:        id,
+		Domain:    domain,
+		CookieJar: make(map[string][]*http.Cookie),
+		CreatedAt: time.Now(),
+	}
+	pm.sessions[domain] = s
+	return s
+}
+
 func (pm *proxyManager) Get(domain string) *ProxySession {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
@@ -459,6 +481,32 @@ func (rl *Relay) HandleProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// API: get latest session for a domain
+	if path == "/bridge/proxy/_latest" {
+		domain := r.URL.Query().Get("domain")
+		if domain == "" {
+			http.Error(w, "Missing domain parameter", 400)
+			return
+		}
+		sess := rl.proxySessions.Get(domain)
+		if sess == nil {
+			w.WriteHeader(404)
+			json.NewEncoder(w).Encode(map[string]interface{}{"error": "no session for domain", "domain": domain})
+			return
+		}
+		browserConnected := rl.proxyWSClients.Get(sess.ID) != nil
+		agentConnected := rl.proxyAgentClients.Get(sess.ID) != nil
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"session_id":        sess.ID,
+			"domain":            sess.Domain,
+			"browser_connected": browserConnected,
+			"agent_connected":   agentConnected,
+			"created_at":        sess.CreatedAt.Format(time.RFC3339),
+		})
+		return
+	}
+
 	domain := extractProxyDomain(path)
 	if domain == "" {
 		http.Error(w, "Missing domain in proxy URL", 400)
@@ -482,7 +530,14 @@ func (rl *Relay) HandleProxy(w http.ResponseWriter, r *http.Request) {
 		targetPath += "?" + r.URL.RawQuery
 	}
 
-	sess := rl.proxySessions.GetOrCreate(domain)
+	// Allow fixed session ID via _vs query param
+	customSessionID := r.URL.Query().Get("_vs")
+	var sess *ProxySession
+	if customSessionID != "" {
+		sess = rl.proxySessions.GetOrCreateWithID(domain, customSessionID)
+	} else {
+		sess = rl.proxySessions.GetOrCreate(domain)
+	}
 
 	// Use a transport with safe dialer to prevent DNS rebinding
 	safeTransport := &http.Transport{
