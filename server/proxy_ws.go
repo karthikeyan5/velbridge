@@ -164,8 +164,8 @@ func (rl *Relay) HandleProxyWS(w http.ResponseWriter, r *http.Request) {
 			// keepalive response
 
 		default:
-			// Forward unknown messages to any connected agent for this session
-			log.Printf("[proxy-ws] [%s] unknown type: %s", sessionID, msgType)
+			// Forward all other messages (eval_result, replay_done, etc.) to agent
+			forwardToAgent(msg)
 		}
 	}
 }
