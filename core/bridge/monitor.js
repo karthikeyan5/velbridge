@@ -10,6 +10,7 @@
 
   var sessionId = window.__velSession || '';
   var domain = window.__velDomain || '';
+  var proxyToken = window.__velProxyToken || '';
   var ws = null;
   var wsReady = false;
   var msgQueue = [];
@@ -31,7 +32,7 @@
 
   function connectWS() {
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    var url = proto + '//' + location.host + '/bridge/proxy/_ws?session=' + sessionId;
+    var url = proto + '//' + location.host + '/bridge/proxy/_ws?session=' + encodeURIComponent(sessionId) + '&token=' + encodeURIComponent(proxyToken);
     ws = new WebSocket(url);
 
     ws.onopen = function() {
@@ -247,6 +248,7 @@
   window.__velInit = function() {
     sessionId = window.__velSession || sessionId;
     domain = window.__velDomain || domain;
+    proxyToken = window.__velProxyToken || proxyToken;
     connectWS();
     startPing();
   };

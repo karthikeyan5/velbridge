@@ -55,8 +55,8 @@ cd /path/to/vel-apps/
 git clone https://github.com/karthikeyan5/velbridge.git
 
 # Rebuild Vel to include VelBridge
-cd /path/to/vel/
-./vel build
+cd /path/to/vel-root/vel/
+go run . build
 sudo systemctl restart vel
 ```
 

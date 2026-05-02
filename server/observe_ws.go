@@ -111,18 +111,13 @@ func (rl *Relay) HandleObserveUserWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify authentication: require valid Vel session or bot token
+	// Verify authentication: require a valid Vel user/API-key auth context,
+	// or an explicit bot token for agent-driven observe sessions.
 	authHeader := r.Header.Get("Authorization")
-	hasAuth := false
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		// Agent/bot token auth
-		hasAuth = true
-	} else {
-		// Check Vel cookie-based auth
-		user := vel.Check(r)
-		if user != nil {
-			hasAuth = true
-		}
+	hasAuth := vel.Check(r) != nil
+	if !hasAuth && strings.HasPrefix(authHeader, "Bearer ") {
+		botToken := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		hasAuth = vel.CheckBotToken(botToken)
 	}
 	if !hasAuth {
 		http.Error(w, "Unauthorized", 401)

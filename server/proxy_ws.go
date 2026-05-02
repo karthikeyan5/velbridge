@@ -70,6 +70,16 @@ func (rl *Relay) HandleProxyWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sess := rl.proxySessions.GetByID(sessionID)
+	if sess == nil {
+		http.Error(w, "Session not found", 404)
+		return
+	}
+	if !rl.proxySessionTokenAuthorized(r, sessionID) {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[proxy-ws] upgrade failed: %v", err)
@@ -79,6 +89,7 @@ func (rl *Relay) HandleProxyWS(w http.ResponseWriter, r *http.Request) {
 	client := &proxyWSClient{
 		conn:      conn,
 		sessionID: sessionID,
+		domain:    sess.Domain,
 	}
 	rl.proxyWSClients.Add(sessionID, client)
 	log.Printf("[proxy-ws] browser connected, session=%s", sessionID)
@@ -253,6 +264,11 @@ func (rl *Relay) HandleProxyWSRelay(w http.ResponseWriter, r *http.Request) {
 // Agents connect here to send commands (screenshot, navigate, etc.) to the proxied page.
 // Accepts either ?session=<id> or ?domain=<domain> (auto-resolves to latest session).
 func (rl *Relay) HandleProxyAgentWS(w http.ResponseWriter, r *http.Request) {
+	if !proxyControlAuthorized(r) {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
+
 	sessionID := r.URL.Query().Get("session")
 	if sessionID == "" {
 		// Try domain-based lookup

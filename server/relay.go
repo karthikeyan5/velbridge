@@ -25,7 +25,7 @@ type Relay struct {
 	launchers *launcherStore
 
 	// Proxy mode (v2)
-	proxySessions  *proxyManager
+	proxySessions     *proxyManager
 	proxyWSClients    *proxyWSManager
 	proxyAgentClients *proxyWSManager
 
@@ -66,15 +66,15 @@ func NewFull(appDir string) *Relay {
 	sm := NewSessionManagerWithDB(db)
 
 	return &Relay{
-		sessions:         sm,
-		pairing:          NewPairingManager(sm),
-		launchers:        newLauncherStore(),
-		proxySessions:    newProxyManager(),
+		sessions:          sm,
+		pairing:           NewPairingManager(sm),
+		launchers:         newLauncherStore(),
+		proxySessions:     newProxyManager(),
 		proxyWSClients:    newProxyWSManager(),
 		proxyAgentClients: newProxyWSManager(),
-		observeSessions:  newObserveManager(dataDir),
-		observeWSClients: newObserveWSManager(),
-		appDir:           appDir,
+		observeSessions:   newObserveManager(dataDir),
+		observeWSClients:  newObserveWSManager(),
+		appDir:            appDir,
 	}
 }
 
@@ -87,8 +87,9 @@ func jsonUnmarshal(data []byte, v interface{}) error {
 func (rl *Relay) HandleV2Status(w http.ResponseWriter, r *http.Request) {
 	// Debug mode status
 	user := vel.Check(r)
+	authenticated := user != nil
 	debugStatus := map[string]interface{}{"state": "disconnected"}
-	if user != nil {
+	if authenticated {
 		token := rl.sessions.GetOrCreateToken(user.ID)
 		sess := rl.sessions.GetByToken(token)
 		if sess != nil {
@@ -124,62 +125,79 @@ func (rl *Relay) HandleV2Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Proxy mode status
-	proxySessions := rl.proxySessions.List()
-	proxyList := make([]map[string]interface{}, 0, len(proxySessions))
-	for _, s := range proxySessions {
-		proxyList = append(proxyList, map[string]interface{}{
-			"id":     s.ID,
-			"domain": s.Domain,
-			"since":  s.CreatedAt.Format(time.RFC3339),
-		})
-	}
+	proxyList := make([]map[string]interface{}, 0)
+	observeList := make([]map[string]interface{}, 0)
+	historyList := make([]map[string]interface{}, 0)
+	observeSettings := map[string]interface{}{}
 
-	// Observe mode status
-	observeSessions := rl.observeSessions.List()
-	observeList := make([]map[string]interface{}, 0, len(observeSessions))
-	for _, s := range observeSessions {
-		s.mu.Lock()
-		observeList = append(observeList, map[string]interface{}{
-			"id":               s.ID,
-			"mode":             s.Mode,
-			"label":            s.Label,
-			"user_connected":   s.UserConnected,
-			"agent_connected":  s.AgentConnected,
-			"data_transferred": s.DataTransferred,
-			"screenshot_count": s.ScreenshotCount,
-			"since":            s.CreatedAt.Format(time.RFC3339),
-		})
-		s.mu.Unlock()
-	}
+	if authenticated {
+		// Proxy mode status
+		proxySessions := rl.proxySessions.List()
+		proxyList = make([]map[string]interface{}, 0, len(proxySessions))
+		for _, s := range proxySessions {
+			proxyList = append(proxyList, map[string]interface{}{
+				"id":     s.ID,
+				"domain": s.Domain,
+				"since":  s.CreatedAt.Format(time.RFC3339),
+			})
+		}
 
-	observeHistory := rl.observeSessions.History()
-	historyList := make([]map[string]interface{}, 0, len(observeHistory))
-	for _, s := range observeHistory {
-		historyList = append(historyList, map[string]interface{}{
-			"id":    s.ID,
-			"label": s.Label,
-			"mode":  s.Mode,
-			"since": s.CreatedAt.Format(time.RFC3339),
-		})
+		// Observe mode status
+		observeSessions := rl.observeSessions.List()
+		observeList = make([]map[string]interface{}, 0, len(observeSessions))
+		for _, s := range observeSessions {
+			s.mu.Lock()
+			observeList = append(observeList, map[string]interface{}{
+				"id":               s.ID,
+				"mode":             s.Mode,
+				"label":            s.Label,
+				"user_connected":   s.UserConnected,
+				"agent_connected":  s.AgentConnected,
+				"data_transferred": s.DataTransferred,
+				"screenshot_count": s.ScreenshotCount,
+				"since":            s.CreatedAt.Format(time.RFC3339),
+			})
+			s.mu.Unlock()
+		}
+
+		observeHistory := rl.observeSessions.History()
+		historyList = make([]map[string]interface{}, 0, len(observeHistory))
+		for _, s := range observeHistory {
+			historyList = append(historyList, map[string]interface{}{
+				"id":    s.ID,
+				"label": s.Label,
+				"mode":  s.Mode,
+				"since": s.CreatedAt.Format(time.RFC3339),
+			})
+		}
+
+		if rl.observeSessions.settings != nil {
+			observeSettings = map[string]interface{}{
+				"quality":    rl.observeSessions.settings.Quality,
+				"tab_audio":  rl.observeSessions.settings.TabAudio,
+				"sys_audio":  rl.observeSessions.settings.SysAudio,
+				"persistent": rl.observeSessions.settings.Persistent,
+				"timeout":    rl.observeSessions.settings.Timeout,
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"debug":           debugStatus,
-		"proxy_sessions":  proxyList,
+		"debug":            debugStatus,
+		"proxy_sessions":   proxyList,
 		"observe_sessions": observeList,
-		"observe_history": historyList,
-		"observe_settings": rl.observeSessions.settings,
+		"observe_history":  historyList,
+		"observe_settings": observeSettings,
 	})
 }
 
 // Envelope is the message format between browser/agent and relay.
 type Envelope struct {
-	Type     string          `json:"type"`
-	TargetID string          `json:"targetId,omitempty"`
-	Data     json.RawMessage `json:"data,omitempty"`
-	Connected *bool          `json:"connected,omitempty"`
+	Type      string          `json:"type"`
+	TargetID  string          `json:"targetId,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	Connected *bool           `json:"connected,omitempty"`
 }
 
 // HandleToken returns a relay token for the authenticated user.

@@ -8,7 +8,7 @@
 >
 > **Complete the [Vel Framework Setup](https://github.com/essdee/vel/blob/main/AGENT-SETUP.md) first.**
 >
-> Follow that guide through Step 5 — it covers Go, Vel, config.json, systemd, and reverse proxy.
+> Follow that guide through Step 5 — it covers Go, Vel, `config/vel.json`, systemd, and reverse proxy.
 >
 > **Come back here after your Vel instance is running.**
 
@@ -19,15 +19,16 @@
 ```bash
 cd <vel-apps-dir>/
 git clone https://github.com/karthikeyan5/velbridge.git
-cd <vel-dir>/
-./vel build && sudo systemctl restart vel
+cd <vel-root>/vel/
+go run . build && sudo systemctl restart vel
 ```
 
 Verify:
 ```bash
-curl -s https://<domain>/bridge/debug/status     # Debug mode status
-curl -s https://<domain>/bridge/proxy/_sessions   # Proxy mode sessions
-curl -s https://<domain>/bridge/status            # Combined status (all modes)
+curl -s https://<domain>/bridge/debug/status                      # Debug mode status
+curl -s https://<domain>/bridge/proxy/_sessions -H "Authorization: Bearer <api_key>"  # Proxy mode sessions
+curl -s https://<domain>/bridge/status                           # Public-safe combined status (redacted)
+curl -s https://<domain>/bridge/status -H "Authorization: Bearer <api_key>"  # Full combined status
 ```
 
 ---
@@ -112,7 +113,9 @@ PROXY_URL="https://<domain>/bridge/proxy/example.com/"
 
 ### Agent control via WebSocket
 ```javascript
-// Connect to the proxy session's agent WS
+// Connect to the proxy session's agent WS.
+// Requires a Vel session cookie, API key, or bot token. Browser WebSocket APIs
+// cannot set Authorization headers; use a Node/Python WS client for bearer auth.
 const ws = new WebSocket('wss://<domain>/bridge/proxy/_agent?session=<sessionId>');
 
 // Send commands to the proxied page
@@ -163,6 +166,7 @@ ws.send(JSON.stringify({ type: 'replay', data: recordedEvents }));
 ### Cookie import (OAuth flows)
 ```bash
 curl -X POST https://<domain>/bridge/proxy/_cookies \
+  -H "Authorization: Bearer <api_key>" \
   -H "Content-Type: application/json" \
   -d '{"domain": "example.com", "cookies": "session_id=abc123\ncsrf_token=xyz789"}'
 ```
@@ -364,7 +368,8 @@ ws.send(JSON.stringify({ type: 'scroll', x: 0, y: 500 }));
 curl https://<domain>/bridge/status -H "Authorization: Bearer <api_key>"
 ```
 
-Returns:
+Without auth, `/bridge/status` returns a redacted public-safe payload (no active session/history details).
+With auth, it returns:
 ```json
 {
   "debug": { "state": "connected", "msgCount": 42 },
@@ -381,7 +386,7 @@ Returns:
 
 ```bash
 cd <vel-apps-dir>/velbridge && git pull
-cd <vel-dir>/ && ./vel build && sudo systemctl restart vel
+cd <vel-root>/vel/ && go run . build && sudo systemctl restart vel
 ```
 
 ---

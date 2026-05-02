@@ -19,11 +19,12 @@ import (
 
 // ProxySession holds state for a single proxy-mode session.
 type ProxySession struct {
-	ID        string
-	Domain    string
-	CookieJar map[string][]*http.Cookie // domain → cookies
-	CreatedAt time.Time
-	mu        sync.Mutex
+	ID           string
+	Domain       string
+	ControlToken string
+	CookieJar    map[string][]*http.Cookie // domain → cookies
+	CreatedAt    time.Time
+	mu           sync.Mutex
 }
 
 // proxyManager manages active proxy sessions.
@@ -51,10 +52,11 @@ func (pm *proxyManager) GetOrCreate(domain string) *ProxySession {
 		return s
 	}
 	s := &ProxySession{
-		ID:        generateToken()[:12],
-		Domain:    domain,
-		CookieJar: make(map[string][]*http.Cookie),
-		CreatedAt: time.Now(),
+		ID:           generateToken()[:12],
+		Domain:       domain,
+		ControlToken: generateToken(),
+		CookieJar:    make(map[string][]*http.Cookie),
+		CreatedAt:    time.Now(),
 	}
 	pm.sessions[domain] = s
 	return s
@@ -73,10 +75,11 @@ func (pm *proxyManager) GetOrCreateWithID(domain, customID string) *ProxySession
 		id = generateToken()[:12]
 	}
 	s := &ProxySession{
-		ID:        id,
-		Domain:    domain,
-		CookieJar: make(map[string][]*http.Cookie),
-		CreatedAt: time.Now(),
+		ID:           id,
+		Domain:       domain,
+		ControlToken: generateToken(),
+		CookieJar:    make(map[string][]*http.Cookie),
+		CreatedAt:    time.Now(),
 	}
 	pm.sessions[domain] = s
 	return s
@@ -86,6 +89,17 @@ func (pm *proxyManager) Get(domain string) *ProxySession {
 	pm.mu.RLock()
 	defer pm.mu.RUnlock()
 	return pm.sessions[domain]
+}
+
+func (pm *proxyManager) GetByID(sessionID string) *ProxySession {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+	for _, s := range pm.sessions {
+		if s.ID == sessionID {
+			return s
+		}
+	}
+	return nil
 }
 
 func (pm *proxyManager) List() []*ProxySession {
@@ -173,8 +187,8 @@ func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error
 // ── Per-domain rate limiter ──
 
 const (
-	rateLimitPerDomain = 10  // requests per second
-	rateLimitBurst     = 20  // burst allowance
+	rateLimitPerDomain = 10 // requests per second
+	rateLimitBurst     = 20 // burst allowance
 )
 
 type domainLimiter struct {
@@ -422,16 +436,24 @@ func isCSSResponse(resp *http.Response) bool {
 }
 
 // buildMonitorScript returns the JS to inject into proxied pages.
-func buildMonitorScript(sessionID, domain string) string {
+func jsString(v string) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return `""`
+	}
+	return string(b)
+}
+
+func buildMonitorScript(sessionID, domain, controlToken string) string {
 	return fmt.Sprintf(`<script src="/bridge/proxy/_core/bridge/html2canvas.min.js"></script>
 <script src="/bridge/proxy/_core/bridge/monitor.js"></script>
 <script src="/bridge/proxy/_core/bridge/commands.js"></script>
 <script src="/bridge/proxy/_core/bridge/recorder.js"></script>
-<script>window.__velSession="%s";window.__velDomain="%s";window.__velInit&&window.__velInit();</script>`, sessionID, domain)
+<script>window.__velSession=%s;window.__velDomain=%s;window.__velProxyToken=%s;window.__velInit&&window.__velInit();</script>`, jsString(sessionID), jsString(domain), jsString(controlToken))
 }
 
-func injectMonitorJS(body, sessionID, domain string) string {
-	script := buildMonitorScript(sessionID, domain)
+func injectMonitorJS(body, sessionID, domain, controlToken string) string {
+	script := buildMonitorScript(sessionID, domain, controlToken)
 	swScript := swRegistrationScript()
 	injection := swScript + script
 	// Inject before </head> or at end of body
@@ -458,12 +480,20 @@ func (rl *Relay) HandleProxy(w http.ResponseWriter, r *http.Request) {
 
 	// API: list proxy sessions
 	if path == "/bridge/proxy/_sessions" {
+		if !proxyControlAuthorized(r) {
+			http.Error(w, "Unauthorized", 401)
+			return
+		}
 		rl.handleProxySessions(w, r)
 		return
 	}
 
 	// API: get latest session for a domain
 	if path == "/bridge/proxy/_latest" {
+		if !proxyControlAuthorized(r) {
+			http.Error(w, "Unauthorized", 401)
+			return
+		}
 		domain := r.URL.Query().Get("domain")
 		if domain == "" {
 			http.Error(w, "Missing domain parameter", 400)
@@ -593,11 +623,11 @@ func (rl *Relay) HandleProxy(w http.ResponseWriter, r *http.Request) {
 				// before SW activates on first load
 				bodyStr = rewriteHeadURLs(bodyStr, domain)
 				// Inject SW registration + monitor scripts
-				bodyStr = injectMonitorJS(bodyStr, sess.ID, domain)
+				bodyStr = injectMonitorJS(bodyStr, sess.ID, domain, sess.ControlToken)
 
 				resp.Body = io.NopCloser(strings.NewReader(bodyStr))
 				resp.ContentLength = -1           // Use chunked transfer — avoids HTTP2 mismatch with downstream compression
-				resp.Header.Del("Content-Length")  // Let transport set it or use chunked
+				resp.Header.Del("Content-Length") // Let transport set it or use chunked
 				resp.Header.Del("Content-Encoding")
 			}
 			// CSS: no longer rewritten — Service Worker handles external CSS URLs
@@ -725,6 +755,10 @@ func (rl *Relay) HandleBridgeConnect(w http.ResponseWriter, r *http.Request) {
 func (rl *Relay) HandleProxyCookieImport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", 405)
+		return
+	}
+	if !proxyControlAuthorized(r) {
+		http.Error(w, "Unauthorized", 401)
 		return
 	}
 	var body struct {

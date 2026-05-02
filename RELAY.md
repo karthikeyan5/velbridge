@@ -153,11 +153,12 @@ Target sites using WebSockets are intercepted by the injected `monitor.js`:
 |----------|------|-------------|
 | `/bridge/proxy/{domain}/{path}` | None | Reverse proxy |
 | `/bridge/proxy/_core/bridge/{file}` | None | Vendored JS files |
-| `/bridge/proxy/_sessions` | None | List active sessions |
-| `/bridge/proxy/_ws` | Session | Browser-side WS (injected JS) |
+| `/bridge/proxy/_sessions` | Vel session/API key or bot token | List active sessions |
+| `/bridge/proxy/_latest` | Vel session/API key or bot token | Resolve latest session for a domain |
+| `/bridge/proxy/_ws` | Per-session control token (or Vel session/API key/bot token) | Browser-side WS (injected JS) |
 | `/bridge/proxy/_wsproxy` | None | WS-to-WS relay |
-| `/bridge/proxy/_agent` | Session | Agent-side WS |
-| `/bridge/proxy/_cookies` | Auth | Import cookies |
+| `/bridge/proxy/_agent` | Vel session/API key or bot token | Agent-side WS |
+| `/bridge/proxy/_cookies` | Vel session/API key or bot token | Import cookies |
 
 ### Server Code
 - `proxy.go` — `proxyManager`, `isBlockedTarget()`, `HandleProxy`, URL rewriting, JS injection
@@ -204,7 +205,7 @@ Target sites using WebSockets are intercepted by the injected `monitor.js`:
 | Endpoint | Auth | Description |
 |----------|------|-------------|
 | `/bridge/observe/{id}` | None | Observe page (public) |
-| `/bridge/observe/_ws` | Session | User browser WebSocket |
+| `/bridge/observe/_ws` | Vel session or bot token | User browser WebSocket |
 | `POST /api/bridge/observe/sessions` | API | Create session |
 | `GET /api/bridge/observe/sessions` | API | List active sessions |
 | `GET /api/bridge/observe/history` | API | Session history (last 10) |
@@ -237,7 +238,8 @@ Target sites using WebSockets are intercepted by the injected `monitor.js`:
 
 ## Combined Status Endpoint
 
-`GET /bridge/status` returns all modes' status in one response:
+`GET /bridge/status` stays public for health/availability checks, but unauthenticated requests receive a redacted payload (no active session/history details).
+Use an authenticated Vel session or `Authorization: Bearer <api_key>` to get the full response:
 ```json
 {
   "debug": { "state": "connected", "msgCount": 42 },
